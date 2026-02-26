@@ -17,7 +17,7 @@ import asyncio
  DEL_REC_TITLE,
  SET_SERIES_CH, SET_MOVIES_CH, SET_RECOMMENDATIONS_CH,
  FUNDING_CH, FUNDING_COUNT,
- SET_INVITE_COUNT) = range(24)
+ SET_INVITE_COUNT) = range(23)  # تم التصحيح من 24 إلى 23
 
 # ================== لوحة الإدارة الرئيسية ==================
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
