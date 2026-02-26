@@ -25,7 +25,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not await utils.check_subscription(user.id, context):
         await update.message.reply_text(
-            "يرجى الاشتراك في القناة أولاً لاستخدام البوت.",
+            "❗ يرجى الاشتراك في القناة أولاً لاستخدام البوت.",
             reply_markup=await utils.force_subscribe_markup()
         )
         return
@@ -51,7 +51,7 @@ async def check_subscription_callback(update: Update, context: ContextTypes.DEFA
         await handle_post_subscribe(update, context)
     else:
         await query.edit_message_text(
-            "لم تشترك بعد. يرجى الاشتراك ثم الضغط على تحقق.",
+            "❌ لم تشترك بعد. يرجى الاشتراك ثم الضغط على تحقق.",
             reply_markup=await utils.force_subscribe_markup()
         )
 
@@ -68,12 +68,12 @@ async def handle_post_subscribe(update: Update, context: ContextTypes.DEFAULT_TY
     else:
         required = int(db.get_invite_setting('required_count') or 5)
         await update.effective_message.reply_text(
-            f"مرحباً! لاستخدام البوت، يجب عليك دعوة {required} من الأصدقاء للاشتراك في القناة.\n"
-            f"رابط الدعوة الخاص بك هو:\n"
+            f"📢 مرحباً! لاستخدام البوت، يجب عليك دعوة {required} من الأصدقاء للاشتراك في القناة.\n"
+            f"🔗 رابط الدعوة الخاص بك:\n"
             f"https://t.me/{config.BOT_USERNAME}?start=invite_{user.id}\n\n"
-            "بعد أن يشترك كل صديق عبر رابطك في القناة، سيتم احتساب الدعوة.",
+            "✅ بعد أن يشترك كل صديق عبر رابطك في القناة، سيتم احتساب الدعوة.",
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("تحقق من الدعوات", callback_data="check_invites")
+                InlineKeyboardButton("🔍 تحقق من الدعوات", callback_data="check_invites")
             ]])
         )
 
@@ -83,23 +83,23 @@ async def check_invites_callback(update: Update, context: ContextTypes.DEFAULT_T
     user = query.from_user
     user_data = db.get_user(user.id)
     if not user_data:
-        await query.edit_message_text("حدث خطأ. أعد المحاولة.")
+        await query.edit_message_text("❌ حدث خطأ. أعد المحاولة.")
         return
     current = user_data[5]
     required = int(db.get_invite_setting('required_count') or 5)
     if current >= required:
         db.set_user_can_use(user.id, True)
-        await query.edit_message_text("تهانينا! يمكنك الآن استخدام البوت.")
+        await query.edit_message_text("🎉 تهانينا! يمكنك الآن استخدام البوت.")
         await show_main_menu(update, context)
     else:
         await query.edit_message_text(
-            f"لقد دعوت {current} من أصل {required}. استمر في الدعوة.",
+            f"📊 لقد دعوت {current} من أصل {required}. استمر في الدعوة.",
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("رجوع", callback_data="back_start")
+                InlineKeyboardButton("🔙 رجوع", callback_data="back_start")
             ]])
         )
 
-# ================== القائمة الرئيسية (محسنة) ==================
+# ================== القائمة الرئيسية ==================
 async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [InlineKeyboardButton("🎬 مسلسلات", callback_data="menu_series")],
@@ -121,7 +121,7 @@ async def series_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     series_list = db.get_all_series_names()
     if not series_list:
-        await query.edit_message_text("لا توجد مسلسلات حالياً.", reply_markup=InlineKeyboardMarkup([utils.back_button("back_main")]))
+        await query.edit_message_text("📭 لا توجد مسلسلات حالياً.", reply_markup=InlineKeyboardMarkup([utils.back_button("back_main")]))
         return
 
     context.user_data['series_list'] = series_list
@@ -143,13 +143,13 @@ async def show_series_page(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     nav_buttons = []
     if has_prev:
-        nav_buttons.append(InlineKeyboardButton("السابق", callback_data="series_prev"))
+        nav_buttons.append(InlineKeyboardButton("◀️ السابق", callback_data="series_prev"))
     if has_next:
-        nav_buttons.append(InlineKeyboardButton("التالي", callback_data="series_next"))
-    footer = nav_buttons + [InlineKeyboardButton("رجوع", callback_data="back_main")]
+        nav_buttons.append(InlineKeyboardButton("التالي ▶️", callback_data="series_next"))
+    footer = nav_buttons + [InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]
 
     reply_markup = InlineKeyboardMarkup(utils.build_menu(buttons, n_cols=2, footer_buttons=footer))
-    await query.edit_message_text("اختر مسلسل:", reply_markup=reply_markup)
+    await query.edit_message_text("📺 اختر مسلسل:", reply_markup=reply_markup)
 
 async def series_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -164,15 +164,25 @@ async def series_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def series_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    series_name = query.data.split('_', 1)[1]
-    series = db.get_series_by_name(series_name)
-    if not series:
-        await query.edit_message_text("المسلسل غير موجود.", reply_markup=InlineKeyboardMarkup([utils.back_button("menu_series")]))
-        return
-    series_id = series[0]
+    data = query.data
+    if data.startswith('series_id_'):
+        series_id = int(data.split('_')[2])
+        series = db.get_series_by_id(series_id)
+        if not series:
+            await query.edit_message_text("❌ المسلسل غير موجود.")
+            return
+        series_name = series[1]  # name في العمود الثاني حسب ترتيب الجدول
+    else:
+        series_name = data.split('_', 1)[1]
+        series = db.get_series_by_name(series_name)
+        if not series:
+            await query.edit_message_text("❌ المسلسل غير موجود.", reply_markup=InlineKeyboardMarkup([utils.back_button("menu_series")]))
+            return
+        series_id = series[0]
+
     episodes = db.get_episodes(series_id)
     if not episodes:
-        await query.edit_message_text("لا توجد حلقات لهذا المسلسل.", reply_markup=InlineKeyboardMarkup([utils.back_button("menu_series")]))
+        await query.edit_message_text("📭 لا توجد حلقات لهذا المسلسل.", reply_markup=InlineKeyboardMarkup([utils.back_button("menu_series")]))
         return
 
     context.user_data['current_series'] = {
@@ -194,17 +204,17 @@ async def show_episode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     rating_text = f"⭐ متوسط التقييم: {avg_rating:.1f}/10" if avg_rating else "لم يتم التقييم بعد"
 
     keyboard = [
-        [InlineKeyboardButton("تقييم وملاحظة", callback_data=f"rate_series_{series_data['id']}"),
-         InlineKeyboardButton("ابلاغ", callback_data=f"report_series_{series_data['id']}")]
+        [InlineKeyboardButton("⭐ تقييم", callback_data=f"rate_series_{series_data['id']}"),
+         InlineKeyboardButton("⚠️ ابلاغ", callback_data=f"report_series_{series_data['id']}")]
     ]
     nav = []
     if ep_index > 0:
-        nav.append(InlineKeyboardButton("السابقة", callback_data="ep_prev"))
+        nav.append(InlineKeyboardButton("◀️ السابقة", callback_data="ep_prev"))
     if ep_index < len(episodes) - 1:
-        nav.append(InlineKeyboardButton("التالية", callback_data="ep_next"))
+        nav.append(InlineKeyboardButton("التالية ▶️", callback_data="ep_next"))
     if nav:
         keyboard.append(nav)
-    keyboard.append([InlineKeyboardButton("العودة للقائمة الرئيسية", callback_data="back_main")])
+    keyboard.append([InlineKeyboardButton("🔙 العودة للقائمة الرئيسية", callback_data="back_main")])
 
     await query.delete_message()
     await context.bot.send_video(
@@ -219,7 +229,7 @@ async def episode_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await query.answer()
     series_data = context.user_data.get('current_series')
     if not series_data:
-        await query.edit_message_text("حدث خطأ.", reply_markup=InlineKeyboardMarkup([utils.back_button("menu_series")]))
+        await query.edit_message_text("❌ حدث خطأ.", reply_markup=InlineKeyboardMarkup([utils.back_button("menu_series")]))
         return
     if query.data == "ep_next":
         series_data['current_episode'] += 1
@@ -241,8 +251,8 @@ async def rate_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     buttons = [InlineKeyboardButton(str(i), callback_data=f"set_rate_{i}") for i in range(1, 11)]
     row1 = buttons[:5]
     row2 = buttons[5:]
-    keyboard = [row1, row2, [InlineKeyboardButton("رجوع", callback_data="back_to_content")]]
-    await query.edit_message_text("اختر تقييمك من 1 إلى 10:", reply_markup=InlineKeyboardMarkup(keyboard))
+    keyboard = [row1, row2, [InlineKeyboardButton("🔙 رجوع", callback_data="back_to_content")]]
+    await query.edit_message_text("🔢 اختر تقييمك من 1 إلى 10:", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def set_rate_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -250,11 +260,11 @@ async def set_rate_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     rating = int(query.data.split('_')[2])
     content_type, content_id = context.user_data.get('rating_content', (None, None))
     if not content_type:
-        await query.edit_message_text("حدث خطأ.")
+        await query.edit_message_text("❌ حدث خطأ.")
         return
     user_id = query.from_user.id
     db.add_rating(user_id, content_type, content_id, rating)
-    await query.edit_message_text(f"تم تسجيل تقييمك: {rating}/10. شكراً لك!", reply_markup=InlineKeyboardMarkup([utils.back_button("back_to_content")]))
+    await query.edit_message_text(f"✅ تم تسجيل تقييمك: {rating}/10. شكراً لك!", reply_markup=InlineKeyboardMarkup([utils.back_button("back_to_content")]))
 
 async def report_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -265,7 +275,7 @@ async def report_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     content_id = int(parts[2])
     user_id = query.from_user.id
     db.add_report(user_id, content_type, content_id)
-    await query.edit_message_text("تم الإبلاغ. شكراً لمساعدتك.", reply_markup=InlineKeyboardMarkup([utils.back_button("back_to_content")]))
+    await query.edit_message_text("✅ تم الإبلاغ. شكراً لمساعدتك.", reply_markup=InlineKeyboardMarkup([utils.back_button("back_to_content")]))
 
 # ================== الأفلام ==================
 @ensure_subscribed
@@ -274,7 +284,7 @@ async def movies_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     movies_list = db.get_all_movies_names()
     if not movies_list:
-        await query.edit_message_text("لا توجد أفلام حالياً.", reply_markup=InlineKeyboardMarkup([utils.back_button("back_main")]))
+        await query.edit_message_text("📭 لا توجد أفلام حالياً.", reply_markup=InlineKeyboardMarkup([utils.back_button("back_main")]))
         return
     context.user_data['movies_list'] = movies_list
     context.user_data['movies_page'] = 0
@@ -295,13 +305,13 @@ async def show_movies_page(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     nav_buttons = []
     if has_prev:
-        nav_buttons.append(InlineKeyboardButton("السابق", callback_data="movies_prev"))
+        nav_buttons.append(InlineKeyboardButton("◀️ السابق", callback_data="movies_prev"))
     if has_next:
-        nav_buttons.append(InlineKeyboardButton("التالي", callback_data="movies_next"))
-    footer = nav_buttons + [InlineKeyboardButton("رجوع", callback_data="back_main")]
+        nav_buttons.append(InlineKeyboardButton("التالي ▶️", callback_data="movies_next"))
+    footer = nav_buttons + [InlineKeyboardButton("🔙 رجوع", callback_data="back_main")]
 
     reply_markup = InlineKeyboardMarkup(utils.build_menu(buttons, n_cols=2, footer_buttons=footer))
-    await query.edit_message_text("اختر فيلم:", reply_markup=reply_markup)
+    await query.edit_message_text("🎥 اختر فيلم:", reply_markup=reply_markup)
 
 async def movies_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -316,15 +326,25 @@ async def movies_pagination(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def movie_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    movie_name = query.data.split('_', 1)[1]
-    movie = db.get_movie_by_name(movie_name)
-    if not movie:
-        await query.edit_message_text("الفيلم غير موجود.", reply_markup=InlineKeyboardMarkup([utils.back_button("menu_movies")]))
-        return
-    movie_id = movie[0]
+    data = query.data
+    if data.startswith('movie_id_'):
+        movie_id = int(data.split('_')[2])
+        movie = db.get_movie_by_id(movie_id)
+        if not movie:
+            await query.edit_message_text("❌ الفيلم غير موجود.")
+            return
+        movie_name = movie[1]
+    else:
+        movie_name = data.split('_', 1)[1]
+        movie = db.get_movie_by_name(movie_name)
+        if not movie:
+            await query.edit_message_text("❌ الفيلم غير موجود.", reply_markup=InlineKeyboardMarkup([utils.back_button("menu_movies")]))
+            return
+        movie_id = movie[0]
+
     parts = db.get_movie_parts(movie_id)
     if not parts:
-        await query.edit_message_text("لا توجد أجزاء لهذا الفيلم.", reply_markup=InlineKeyboardMarkup([utils.back_button("menu_movies")]))
+        await query.edit_message_text("📭 لا توجد أجزاء لهذا الفيلم.", reply_markup=InlineKeyboardMarkup([utils.back_button("menu_movies")]))
         return
 
     context.user_data['current_movie'] = {
@@ -346,17 +366,17 @@ async def show_movie_part(update: Update, context: ContextTypes.DEFAULT_TYPE):
     rating_text = f"⭐ متوسط التقييم: {avg_rating:.1f}/10" if avg_rating else "لم يتم التقييم بعد"
 
     keyboard = [
-        [InlineKeyboardButton("تقييم وملاحظة", callback_data=f"rate_movie_{movie_data['id']}"),
-         InlineKeyboardButton("ابلاغ", callback_data=f"report_movie_{movie_data['id']}")]
+        [InlineKeyboardButton("⭐ تقييم", callback_data=f"rate_movie_{movie_data['id']}"),
+         InlineKeyboardButton("⚠️ ابلاغ", callback_data=f"report_movie_{movie_data['id']}")]
     ]
     nav = []
     if part_index > 0:
-        nav.append(InlineKeyboardButton("السابق", callback_data="part_prev"))
+        nav.append(InlineKeyboardButton("◀️ السابق", callback_data="part_prev"))
     if part_index < len(parts) - 1:
-        nav.append(InlineKeyboardButton("التالي", callback_data="part_next"))
+        nav.append(InlineKeyboardButton("التالي ▶️", callback_data="part_next"))
     if nav:
         keyboard.append(nav)
-    keyboard.append([InlineKeyboardButton("العودة للقائمة الرئيسية", callback_data="back_main")])
+    keyboard.append([InlineKeyboardButton("🔙 العودة للقائمة الرئيسية", callback_data="back_main")])
 
     await query.delete_message()
     await context.bot.send_video(
@@ -371,7 +391,7 @@ async def part_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     movie_data = context.user_data.get('current_movie')
     if not movie_data:
-        await query.edit_message_text("حدث خطأ.", reply_markup=InlineKeyboardMarkup([utils.back_button("menu_movies")]))
+        await query.edit_message_text("❌ حدث خطأ.", reply_markup=InlineKeyboardMarkup([utils.back_button("menu_movies")]))
         return
     if query.data == "part_next":
         movie_data['current_part'] += 1
@@ -386,36 +406,38 @@ async def search_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     await query.edit_message_text(
-        "أرسل اسم المسلسل أو الفيلم الذي تبحث عنه:",
+        "🔍 أرسل اسم المسلسل أو الفيلم الذي تبحث عنه:",
         reply_markup=InlineKeyboardMarkup([utils.back_button("back_main")])
     )
     return "SEARCH"
 
 async def handle_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip()
-    series_names = db.get_all_series_names()
-    movie_names = db.get_all_movies_names()
+    text = update.message.text.strip().lower()
+
+    series_list = db.get_all_series() or []  # قائمة (id, name)
+    movie_list = db.get_all_movies() or []
+
     results = []
-    for name in series_names:
-        if text.lower() in name.lower():
-            results.append(("مسلسل", name))
-    for name in movie_names:
-        if text.lower() in name.lower():
-            results.append(("فيلم", name))
+    for sid, name in series_list:
+        if text in name.lower():
+            results.append(('series', sid, name))
+    for mid, name in movie_list:
+        if text in name.lower():
+            results.append(('movie', mid, name))
 
     if not results:
-        await update.message.reply_text("لا توجد نتائج.", reply_markup=InlineKeyboardMarkup([utils.back_button("back_main")]))
+        await update.message.reply_text("📭 لا توجد نتائج.", reply_markup=InlineKeyboardMarkup([utils.back_button("back_main")]))
         return
 
     buttons = []
-    for typ, name in results:
-        if typ == "مسلسل":
-            buttons.append(InlineKeyboardButton(f"📺 {name}", callback_data=f"series_{name}"))
+    for typ, cid, name in results:
+        if typ == 'series':
+            buttons.append(InlineKeyboardButton(f"📺 {name}", callback_data=f"series_id_{cid}"))
         else:
-            buttons.append(InlineKeyboardButton(f"🎥 {name}", callback_data=f"movie_{name}"))
+            buttons.append(InlineKeyboardButton(f"🎥 {name}", callback_data=f"movie_id_{cid}"))
     buttons.append(utils.back_button("back_main"))
     reply_markup = InlineKeyboardMarkup(utils.build_menu(buttons, n_cols=1))
-    await update.message.reply_text("نتائج البحث:", reply_markup=reply_markup)
+    await update.message.reply_text("✅ نتائج البحث:", reply_markup=reply_markup)
     return -1
 
 # ================== التوصيات ==================
@@ -425,7 +447,7 @@ async def recommendations_menu(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.answer()
     recs = db.get_all_recommendations()
     if not recs:
-        await query.edit_message_text("لا توجد توصيات حالياً.", reply_markup=InlineKeyboardMarkup([utils.back_button("back_main")]))
+        await query.edit_message_text("📭 لا توجد توصيات حالياً.", reply_markup=InlineKeyboardMarkup([utils.back_button("back_main")]))
         return
     context.user_data['recommendations'] = recs
     context.user_data['rec_index'] = 0
@@ -440,12 +462,12 @@ async def show_recommendation(update: Update, context: ContextTypes.DEFAULT_TYPE
     keyboard = []
     nav = []
     if index > 0:
-        nav.append(InlineKeyboardButton("السابقة", callback_data="rec_prev"))
+        nav.append(InlineKeyboardButton("◀️ السابقة", callback_data="rec_prev"))
     if index < len(recs) - 1:
-        nav.append(InlineKeyboardButton("التالية", callback_data="rec_next"))
+        nav.append(InlineKeyboardButton("التالية ▶️", callback_data="rec_next"))
     if nav:
         keyboard.append(nav)
-    keyboard.append([InlineKeyboardButton("العودة للقائمة الرئيسية", callback_data="back_main")])
+    keyboard.append([InlineKeyboardButton("🔙 العودة للقائمة الرئيسية", callback_data="back_main")])
 
     if photo:
         await query.delete_message()
@@ -472,7 +494,7 @@ async def rec_navigation(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['rec_index'] -= 1
     await show_recommendation(update, context)
 
-# ================== دعم البوت (نص محسن عاطفي) ==================
+# ================== دعم البوت ==================
 async def support_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -511,4 +533,4 @@ async def back_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "back_start":
         await handle_post_subscribe(update, context)
     else:
-        await show_main_menu(update, context)
+        await show_main_menu(update, context) 
