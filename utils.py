@@ -18,13 +18,13 @@ async def check_subscription(user_id: int, context: ContextTypes.DEFAULT_TYPE, c
 
 async def force_subscribe_markup():
     keyboard = [
-        [InlineKeyboardButton("اشترك في القناة", url=config.FORCE_CHANNEL_LINK)],
-        [InlineKeyboardButton("تحقق من الاشتراك", callback_data="check_sub")]
+        [InlineKeyboardButton("📢 اشترك في القناة", url=config.FORCE_CHANNEL_LINK)],
+        [InlineKeyboardButton("✅ تحقق من الاشتراك", callback_data="check_sub")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
 def back_button(callback_data: str = "back"):
-    return [InlineKeyboardButton("رجوع", callback_data=callback_data)]
+    return [InlineKeyboardButton("🔙 رجوع", callback_data=callback_data)]
 
 def build_menu(buttons, n_cols=1, header_buttons=None, footer_buttons=None):
     menu = [buttons[i:i + n_cols] for i in range(0, len(buttons), n_cols)]
@@ -51,7 +51,6 @@ async def user_can_access(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> b
 
     return True
 
-# ديكوريتور معدل باستخدام wraps
 def ensure_subscribed(func):
     @wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
@@ -59,18 +58,17 @@ def ensure_subscribed(func):
         if not await user_can_access(user.id, context):
             if not await check_subscription(user.id, context):
                 await update.effective_message.reply_text(
-                    "يرجى الاشتراك في القناة أولاً لاستخدام البوت.",
+                    "❗ يرجى الاشتراك في القناة أولاً لاستخدام البوت.",
                     reply_markup=await force_subscribe_markup()
                 )
             else:
                 await update.effective_message.reply_text(
-                    "تحتاج إلى دعوة 5 أشخاص لاستخدام البوت. استخدم /start لعرض رابط الدعوة."
+                    "⚠️ تحتاج إلى دعوة 5 أشخاص لاستخدام البوت. استخدم /start لعرض رابط الدعوة."
                 )
-            return  # لا نكمل تنفيذ الدالة
+            return
         return await func(update, context, *args, **kwargs)
     return wrapper
 
-# دالة لتقسيم القوائم (بدون تغيير)
 def split_list(lst, page, page_size=10):
     start = page * page_size
     end = start + page_size
