@@ -171,7 +171,7 @@ async def series_select(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not series:
             await query.edit_message_text("❌ المسلسل غير موجود.")
             return
-        series_name = series[1]  # name في العمود الثاني حسب ترتيب الجدول
+        series_name = series[1]
     else:
         series_name = data.split('_', 1)[1]
         series = db.get_series_by_name(series_name)
@@ -203,6 +203,15 @@ async def show_episode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     avg_rating = db.get_average_rating('series', series_data['id'])
     rating_text = f"⭐ متوسط التقييم: {avg_rating:.1f}/10" if avg_rating else "لم يتم التقييم بعد"
 
+    # نص وصفي أطول
+    description = (
+        f"🎬 *{series_data['name']}* - الحلقة {ep_number}\n"
+        f"{rating_text}\n\n"
+        "يمكنك التنقل بين الحلقات باستخدام الأزرار أدناه.\n"
+        "قيم الحلقة بالضغط على ⭐ تقييم، وأبلغ عن مشكلة بالضغط على ⚠️ ابلاغ.\n"
+        "شكراً لاستخدامك البوت!"
+    )
+
     keyboard = [
         [InlineKeyboardButton("⭐ تقييم", callback_data=f"rate_series_{series_data['id']}"),
          InlineKeyboardButton("⚠️ ابلاغ", callback_data=f"report_series_{series_data['id']}")]
@@ -220,7 +229,8 @@ async def show_episode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_video(
         chat_id=query.message.chat_id,
         video=file_id,
-        caption=f"🎬 {series_data['name']} - الحلقة {ep_number}\n{rating_text}",
+        caption=description,
+        parse_mode='Markdown',
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -365,6 +375,14 @@ async def show_movie_part(update: Update, context: ContextTypes.DEFAULT_TYPE):
     avg_rating = db.get_average_rating('movie', movie_data['id'])
     rating_text = f"⭐ متوسط التقييم: {avg_rating:.1f}/10" if avg_rating else "لم يتم التقييم بعد"
 
+    description = (
+        f"🎬 *{movie_data['name']}* - الجزء {part_number}\n"
+        f"{rating_text}\n\n"
+        "يمكنك التنقل بين الأجزاء باستخدام الأزرار أدناه.\n"
+        "قيم الفيلم بالضغط على ⭐ تقييم، وأبلغ عن مشكلة بالضغط على ⚠️ ابلاغ.\n"
+        "شكراً لاستخدامك البوت!"
+    )
+
     keyboard = [
         [InlineKeyboardButton("⭐ تقييم", callback_data=f"rate_movie_{movie_data['id']}"),
          InlineKeyboardButton("⚠️ ابلاغ", callback_data=f"report_movie_{movie_data['id']}")]
@@ -382,7 +400,8 @@ async def show_movie_part(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_video(
         chat_id=query.message.chat_id,
         video=file_id,
-        caption=f"🎬 {movie_data['name']} - الجزء {part_number}\n{rating_text}",
+        caption=description,
+        parse_mode='Markdown',
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -414,7 +433,7 @@ async def search_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip().lower()
 
-    series_list = db.get_all_series() or []  # قائمة (id, name)
+    series_list = db.get_all_series() or []
     movie_list = db.get_all_movies() or []
 
     results = []
