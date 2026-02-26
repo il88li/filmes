@@ -1,135 +1,169 @@
-import json
-import logging
-from typing import Dict, List, Optional, Any
-from pathlib import Path
-from datetime import datetime
+import sqlite3
+import threading
+from config import DB_NAME
 
-from config import DB_PATH
+# تأمين للكتابة متعددة الخيوط (اختياري)
+lock = threading.Lock()
 
-logger = logging.getLogger(__name__)
+def get_connection():
+    return sqlite3.connect(DB_NAME, check_same_thread=False)
 
-class Database:
-    """إدارة جميع البيانات باستخدام ملف JSON."""
-    
-    def __init__(self, db_path: Path = DB_PATH):
-        self.db_path = db_path
-        self.data = self._load()
+def init_db():
+    with lock:
+        conn = get_connection()
+        c = conn.cursor()
+        # جدول المستخدمين
+        c.execute('''CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT,
+            first_name TEXT,
+            is_banned INTEGER DEFAULT 0,
+            invite_link_used TEXT,  -- الرابط الذي استخدمه للتسجيل (إن وجد)
+            invites_count INTEGER DEFAULT 0,  -- عدد المدعوين الذين اشتركوا
+            invited_users TEXT,  -- قائمة ids المدعوين (مفصولة بفواصل)
+            can_use_bot INTEGER DEFAULT 0,  -- 1 إذا كان يستطيع استخدام البوت (بعد الدعوات)
+            join_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
+        # جدول المسلسلات
+        c.execute('''CREATE TABLE IF NOT EXISTS series (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE,
+            total_episodes INTEGER DEFAULT 0
+        )''')
+        # جدول حلقات المسلسلات
+        c.execute('''CREATE TABLE IF NOT EXISTS episodes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            series_id INTEGER,
+            episode_number INTEGER,
+            file_id TEXT,
+            message_id INTEGER,  -- message_id في قناة المسلسلات
+            FOREIGN KEY (series_id) REFERENCES series(id) ON DELETE CASCADE
+        )''')
+        # جدول الأفلام (يمكن التعامل معها كمسلسل بحلقة واحدة أو عدة أجزاء)
+        c.execute('''CREATE TABLE IF NOT EXISTS movies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE,
+            parts_count INTEGER DEFAULT 0
+        )''')
+        c.execute('''CREATE TABLE IF NOT EXISTS movie_parts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            movie_id INTEGER,
+            part_number INTEGER,
+            file_id TEXT,
+            message_id INTEGER,
+            FOREIGN KEY (movie_id) REFERENCES movies(id) ON DELETE CASCADE
+        )''')
+        # جدول التقييمات
+        c.execute('''CREATE TABLE IF NOT EXISTS ratings (
+            user_id INTEGER,
+            content_type TEXT,  -- 'series' or 'movie'
+            content_id INTEGER,
+            rating INTEGER,  -- 1-10
+            PRIMARY KEY (user_id, content_type, content_id)
+        )''')
+        # جدول البلاغات
+        c.execute('''CREATE TABLE IF NOT EXISTS reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            content_type TEXT,
+            content_id INTEGER,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )''')
+        # جدول التوصيات
+        c.execute('''CREATE TABLE IF NOT EXISTS recommendations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,  -- اسم المسلسل أو الفلم
+            content_type TEXT,  -- 'series' or 'movie'
+            content_id INTEGER,
+            photo_file_id TEXT,
+            description TEXT
+        )''')
+        # جدول إعدادات القنوات
+        c.execute('''CREATE TABLE IF NOT EXISTS channels (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )''')
+        # جدول قناة التمويل (المؤقتة)
+        c.execute('''CREATE TABLE IF NOT EXISTS funding_channel (
+            chat_id TEXT,
+            required_members INTEGER,
+            current_members TEXT  -- قائمة ids الأعضاء الذين تم احتسابهم
+        )''')
+        # جدول إعدادات الدعوة
+        c.execute('''CREATE TABLE IF NOT EXISTS invite_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )''')
+        # إدخال القيم الافتراضية لإعدادات الدعوة
+        c.execute("INSERT OR IGNORE INTO invite_settings (key, value) VALUES (?, ?)", ('enabled', 'true'))
+        c.execute("INSERT OR IGNORE INTO invite_settings (key, value) VALUES (?, ?)", ('required_count', '5'))
+        conn.commit()
+        conn.close()
 
-    def _load(self) -> Dict:
-        """تحميل البيانات من الملف أو إنشاء هيكل جديد."""
-        if self.db_path.exists():
-            try:
-                with open(self.db_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except Exception as e:
-                logger.error(f"خطأ في قراءة قاعدة البيانات: {e}")
-                return self._empty_data()
+init_db()
+
+# دوال مساعدة
+def execute_query(query, params=(), fetchone=False, fetchall=False):
+    with lock:
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute(query, params)
+        if fetchone:
+            result = c.fetchone()
+        elif fetchall:
+            result = c.fetchall()
         else:
-            return self._empty_data()
-
-    def _empty_data(self) -> Dict:
-        """هيكل البيانات الافتراضي."""
-        return {
-            "series": {},          # اسم المسلسل -> {last_episode, channel_id, added_date}
-            "movies": {},          # اسم الفيلم -> {file_id, channel_id, added_date}
-            "sent_videos": {},     # file_unique_id -> {series_name, episode, file_id} or {movie_name}
-            "channels": [],        # قائمة معرفات القنوات المسموح بها
-            "users": {}            # user_id -> {"role": "admin" or "user"} (للبساطة)
-        }
-
-    def save(self):
-        """حفظ البيانات إلى ملف JSON."""
-        try:
-            with open(self.db_path, 'w', encoding='utf-8') as f:
-                json.dump(self.data, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            logger.error(f"خطأ في حفظ قاعدة البيانات: {e}")
-
-    # ------------------ إدارة القنوات ------------------
-    def get_channels(self) -> List[int]:
-        return self.data["channels"]
-
-    def add_channel(self, channel_id: int) -> bool:
-        if channel_id not in self.data["channels"]:
-            self.data["channels"].append(channel_id)
-            self.save()
-            return True
-        return False
-
-    def remove_channel(self, channel_id: int) -> bool:
-        if channel_id in self.data["channels"]:
-            self.data["channels"].remove(channel_id)
-            self.save()
-            return True
-        return False
-
-    # ------------------ المسلسلات ------------------
-    def add_series_episode(self, series_name: str, episode: int, file_id: str, file_unique_id: str, channel_id: int):
-        """تسجيل حلقة جديدة لمسلسل."""
-        # تحديث معلومات المسلسل
-        if series_name not in self.data["series"]:
-            self.data["series"][series_name] = {
-                "last_episode": 0,
-                "channel_id": channel_id,
-                "added_date": datetime.now().isoformat()
-            }
-        if episode > self.data["series"][series_name]["last_episode"]:
-            self.data["series"][series_name]["last_episode"] = episode
-
-        # تسجيل الفيديو المرسل
-        self.data["sent_videos"][file_unique_id] = {
-            "series_name": series_name,
-            "episode": episode,
-            "file_id": file_id
-        }
-        self.save()
-
-    def get_series_list(self) -> List[str]:
-        return list(self.data["series"].keys())
-
-    def get_series_info(self, series_name: str) -> Optional[Dict]:
-        return self.data["series"].get(series_name)
-
-    def get_last_episode(self, series_name: str) -> int:
-        return self.data["series"].get(series_name, {}).get("last_episode", 0)
-
-    # ------------------ الأفلام ------------------
-    def add_movie(self, movie_name: str, file_id: str, file_unique_id: str, channel_id: int):
-        self.data["movies"][movie_name] = {
-            "file_id": file_id,
-            "channel_id": channel_id,
-            "added_date": datetime.now().isoformat()
-        }
-        self.data["sent_videos"][file_unique_id] = {"movie_name": movie_name}
-        self.save()
-
-    def get_movies_list(self) -> List[str]:
-        return list(self.data["movies"].keys())
-
-    def get_movie_info(self, movie_name: str) -> Optional[Dict]:
-        return self.data["movies"].get(movie_name)
-
-    # ------------------ التحقق من التكرار ------------------
-    def is_video_sent(self, file_unique_id: str) -> bool:
-        return file_unique_id in self.data["sent_videos"]
-
-    def get_video_info(self, file_unique_id: str) -> Optional[Dict]:
-        return self.data["sent_videos"].get(file_unique_id)
-
-    # ------------------ البحث ------------------
-    def search(self, query: str) -> Dict[str, List[str]]:
-        """البحث في المسلسلات والأفلام."""
-        query = query.lower()
-        result = {"series": [], "movies": []}
-        for s in self.data["series"]:
-            if query in s.lower():
-                result["series"].append(s)
-        for m in self.data["movies"]:
-            if query in m.lower():
-                result["movies"].append(m)
+            result = None
+        conn.commit()
+        conn.close()
         return result
 
-    # ------------------ المستخدمين (للبساطة نعتبر الجميع مشرفين) ------------------
-    def is_admin(self, user_id: int) -> bool:
-        # يمكنك تخصيص صلاحيات المشرفين هنا
-        return True  # للتبسيط، كل المستخدمين مشرفون
+def add_user(user_id, username, first_name, invite_link_used=None):
+    # إضافة مستخدم جديد إذا لم يكن موجوداً
+    user = get_user(user_id)
+    if not user:
+        execute_query(
+            "INSERT INTO users (user_id, username, first_name, invite_link_used) VALUES (?, ?, ?, ?)",
+            (user_id, username, first_name, invite_link_used)
+        )
+    else:
+        # تحديث البيانات
+        execute_query(
+            "UPDATE users SET username = ?, first_name = ? WHERE user_id = ?",
+            (username, first_name, user_id)
+        )
+
+def get_user(user_id):
+    return execute_query("SELECT * FROM users WHERE user_id = ?", (user_id,), fetchone=True)
+
+def update_user_invites(user_id, invited_user_id):
+    # تحديث عدد دعوات المستخدم وإضافة المدعو إلى قائمته
+    user = get_user(user_id)
+    if user:
+        invited_list = user[6] or ''  # invited_users في العمود 6 حسب الترتيب
+        invited_ids = invited_list.split(',') if invited_list else []
+        if str(invited_user_id) not in invited_ids:
+            invited_ids.append(str(invited_user_id))
+            new_list = ','.join(invited_ids)
+            new_count = user[5] + 1  # invites_count في العمود 5
+            required = int(get_invite_setting('required_count') or 5)
+            can_use = 1 if new_count >= required else 0
+            execute_query(
+                "UPDATE users SET invites_count = ?, invited_users = ?, can_use_bot = ? WHERE user_id = ?",
+                (new_count, new_list, can_use, user_id)
+            )
+            return True
+    return False
+
+def set_user_can_use(user_id, can_use):
+    execute_query("UPDATE users SET can_use_bot = ? WHERE user_id = ?", (1 if can_use else 0, user_id))
+
+def get_invite_setting(key):
+    result = execute_query("SELECT value FROM invite_settings WHERE key = ?", (key,), fetchone=True)
+    return result[0] if result else None
+
+def set_invite_setting(key, value):
+    execute_query("INSERT OR REPLACE INTO invite_settings (key, value) VALUES (?, ?)", (key, value))
+
+# دوال أخرى مماثلة للمسلسلات والأفلام والتقييمات إلخ...
+# (سأضيف البعض منها لاحقاً) 
