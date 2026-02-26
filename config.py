@@ -1,15 +1,11 @@
-def init_default_channels():
-    """تعيين القنوات الافتراضية إذا لم تكن موجودة"""
-    from config import DEFAULT_SERIES_CHANNEL, DEFAULT_MOVIES_CHANNEL, DEFAULT_RECOMMENDATIONS_CHANNEL
-    
-    if not get_channel('series_channel'):
-        set_channel('series_channel', DEFAULT_SERIES_CHANNEL)
-        print(f"✅ تم تعيين قناة المسلسلات الافتراضية: {DEFAULT_SERIES_CHANNEL}")
-    
-    if not get_channel('movies_channel'):
-        set_channel('movies_channel', DEFAULT_MOVIES_CHANNEL)
-        print(f"✅ تم تعيين قناة الأفلام الافتراضية: {DEFAULT_MOVIES_CHANNEL}")
-    
-    if not get_channel('recommendations_channel'):
-        set_recommendations_channel(DEFAULT_RECOMMENDATIONS_CHANNEL)
-        print(f"✅ تم تعيين قناة التوصيات الافتراضية: {DEFAULT_RECOMMENDATIONS_CHANNEL}")
+TOKEN = "8338583447:AAHC_hc1IR_fSqgPSK4xpnefHi2mcke8cI4"
+ADMIN_ID = 6689435577
+FORCE_CHANNEL = "@iIl337"
+FORCE_CHANNEL_LINK = "https://t.me/iIl337"
+BOT_USERNAME = "FI7O_BOT"
+DB_NAME = "bot_data.db"
+
+# القنوات الافتراضية (سيتم تعيينها تلقائيًا إذا لم تكن موجودة)
+DEFAULT_SERIES_CHANNEL = "@FIL2360"
+DEFAULT_MOVIES_CHANNEL = "@FIL360"
+DEFAULT_RECOMMENDATIONS_CHANNEL = "@TOSI7"
