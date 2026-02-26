@@ -203,7 +203,6 @@ async def show_episode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     avg_rating = db.get_average_rating('series', series_data['id'])
     rating_text = f"⭐ متوسط التقييم: {avg_rating:.1f}/10" if avg_rating else "لم يتم التقييم بعد"
 
-    # نص وصفي أطول
     description = (
         f"🎬 *{series_data['name']}* - الحلقة {ep_number}\n"
         f"{rating_text}\n\n"
@@ -262,7 +261,7 @@ async def rate_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     row1 = buttons[:5]
     row2 = buttons[5:]
     keyboard = [row1, row2, [InlineKeyboardButton("🔙 رجوع", callback_data="back_to_content")]]
-    await query.edit_message_text("🔢 اختر تقييمك من 1 إلى 10:", reply_markup=InlineKeyboardMarkup(keyboard))
+    await query.message.reply_text("🔢 اختر تقييمك من 1 إلى 10:", reply_markup=InlineKeyboardMarkup(keyboard))
 
 async def set_rate_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -274,18 +273,18 @@ async def set_rate_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     user_id = query.from_user.id
     db.add_rating(user_id, content_type, content_id, rating)
-    await query.edit_message_text(f"✅ تم تسجيل تقييمك: {rating}/10. شكراً لك!", reply_markup=InlineKeyboardMarkup([utils.back_button("back_to_content")]))
+    await query.edit_message_text(f"✅ تم تسجيل تقييمك: {rating}/10. شكراً لك!")
+    await query.message.reply_text("يمكنك العودة باستخدام الأزرار.", reply_markup=InlineKeyboardMarkup([utils.back_button("back_to_content")]))
 
 async def report_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await query.answer("✅ تم الإبلاغ. شكراً لمساعدتك!", show_alert=True)
     data = query.data
     parts = data.split('_')
     content_type = parts[1]
     content_id = int(parts[2])
     user_id = query.from_user.id
     db.add_report(user_id, content_type, content_id)
-    await query.edit_message_text("✅ تم الإبلاغ. شكراً لمساعدتك.", reply_markup=InlineKeyboardMarkup([utils.back_button("back_to_content")]))
 
 # ================== الأفلام ==================
 @ensure_subscribed
