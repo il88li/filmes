@@ -1,0 +1,29 @@
+# config.py
+import os
+
+# توكن البوت
+TOKEN = "8338583447:AAHC_hc1IR_fSqgPSK4xpnefHi2mcke8cI4"
+
+# ايدي المدير (مستثنى من جميع القيود)
+ADMIN_ID = 6689435577
+
+# قناة الاشتراك الإجباري الرئيسية
+FORCED_CHANNEL = "@iIl337"  # بدون https://t.me/، فقط اليوزرنيم مع @
+
+# اسم المستخدم للبوت (لروابط الدعوة)
+BOT_USERNAME = "FI7O_BOT"
+
+# مسار قاعدة البيانات
+DATABASE_FILE = "bot_data.db"
+
+# إعدادات التصفح (عدد العناصر في الصفحة الواحدة)
+ITEMS_PER_PAGE = 10
+
+# حالات المحادثات (للملفات الأخرى)
+(ADD_SERIES_NAME, ADD_SERIES_VIDEOS, EDIT_SERIES_NAME_OLD, EDIT_SERIES_NAME_NEW,
+ DELETE_SERIES_NAME, ADD_MOVIE_NAME, ADD_MOVIE_VIDEOS, EDIT_MOVIE_NAME_OLD,
+ EDIT_MOVIE_NAME_NEW, DELETE_MOVIE_NAME, BROADCAST_MESSAGE,
+ BAN_USER_ID, UNBAN_USER_ID, SET_REQUIRED_INVITES,
+ SET_SERIES_CHANNEL, SET_MOVIES_CHANNEL, ADD_TEMP_FUNDING_CHANNEL_NAME,
+ ADD_TEMP_FUNDING_CHANNEL_MEMBERS, ADD_RECOMMENDATION_TYPE, ADD_RECOMMENDATION_NAME,
+ ADD_RECOMMENDATION_IMAGE, ADD_RECOMMENDATION_DESC, DELETE_RECOMMENDATION_NAME) = range(23)
