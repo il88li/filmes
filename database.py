@@ -1,66 +1,80 @@
 import json
 import logging
-from typing import Dict, Optional, Any
+from typing import Dict, List, Optional, Any
 from pathlib import Path
+from datetime import datetime
 
 from config import DB_PATH
 
-# إعداد تسجيل الأحداث
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class SeriesDatabase:
-    """إدارة قاعدة بيانات المسلسلات والأفلام باستخدام ملف JSON."""
+class Database:
+    """إدارة جميع البيانات باستخدام ملف JSON."""
     
     def __init__(self, db_path: Path = DB_PATH):
         self.db_path = db_path
-        self.data: Dict[str, Any] = self._load_data()
+        self.data = self._load()
 
-    def _load_data(self) -> Dict[str, Any]:
-        """تحميل البيانات من ملف JSON أو إنشاء هيكل جديد إذا لم يكن الملف موجوداً."""
+    def _load(self) -> Dict:
+        """تحميل البيانات من الملف أو إنشاء هيكل جديد."""
         if self.db_path.exists():
             try:
                 with open(self.db_path, 'r', encoding='utf-8') as f:
                     return json.load(f)
-            except (json.JSONDecodeError, IOError) as e:
-                logger.error(f"خطأ في قراءة قاعدة البيانات: {e}. سيتم إنشاء قاعدة بيانات جديدة.")
-                return self._get_empty_structure()
+            except Exception as e:
+                logger.error(f"خطأ في قراءة قاعدة البيانات: {e}")
+                return self._empty_data()
         else:
-            logger.info("لم يتم العثور على قاعدة بيانات. سيتم إنشاء قاعدة جديدة.")
-            return self._get_empty_structure()
+            return self._empty_data()
 
-    def _get_empty_structure(self) -> Dict[str, Any]:
-        """إرجاع هيكل قاعدة البيانات الفارغ."""
+    def _empty_data(self) -> Dict:
+        """هيكل البيانات الافتراضي."""
         return {
-            "series": {},      # حفظ معلومات المسلسلات: {"اسم_المسلسل": {"last_episode": 5, "channel_id": -100...}}
-            "movies": {},      # حفظ معلومات الأفلام: {"اسم_الفيلم": {"file_id": "..."}}
-            "sent_videos": {}  # حفظ الفيديوهات التي تم إرسالها لتجنب التكرار: {"file_unique_id": {"series_name": "...", "episode": ...}}
+            "series": {},          # اسم المسلسل -> {last_episode, channel_id, added_date}
+            "movies": {},          # اسم الفيلم -> {file_id, channel_id, added_date}
+            "sent_videos": {},     # file_unique_id -> {series_name, episode, file_id} or {movie_name}
+            "channels": [],        # قائمة معرفات القنوات المسموح بها
+            "users": {}            # user_id -> {"role": "admin" or "user"} (للبساطة)
         }
 
-    def save(self) -> None:
-        """حفظ البيانات الحالية إلى ملف JSON."""
+    def save(self):
+        """حفظ البيانات إلى ملف JSON."""
         try:
             with open(self.db_path, 'w', encoding='utf-8') as f:
                 json.dump(self.data, f, ensure_ascii=False, indent=2)
-        except IOError as e:
+        except Exception as e:
             logger.error(f"خطأ في حفظ قاعدة البيانات: {e}")
 
-    def add_series_episode(self, series_name: str, episode: int, file_id: str, file_unique_id: str, channel_id: int) -> None:
-        """
-        إضافة حلقة جديدة لمسلسل معين.
-        
-        - series_name: اسم المسلسل
-        - episode: رقم الحلقة
-        - file_id: معرف الفيديو من تليجرام
-        - file_unique_id: معرف فريد للفيديو (للكشف عن التكرار)
-        - channel_id: معرف القناة التي أرسل إليها الفيديو
-        """
+    # ------------------ إدارة القنوات ------------------
+    def get_channels(self) -> List[int]:
+        return self.data["channels"]
+
+    def add_channel(self, channel_id: int) -> bool:
+        if channel_id not in self.data["channels"]:
+            self.data["channels"].append(channel_id)
+            self.save()
+            return True
+        return False
+
+    def remove_channel(self, channel_id: int) -> bool:
+        if channel_id in self.data["channels"]:
+            self.data["channels"].remove(channel_id)
+            self.save()
+            return True
+        return False
+
+    # ------------------ المسلسلات ------------------
+    def add_series_episode(self, series_name: str, episode: int, file_id: str, file_unique_id: str, channel_id: int):
+        """تسجيل حلقة جديدة لمسلسل."""
         # تحديث معلومات المسلسل
-        series_info = self.data["series"].get(series_name, {"last_episode": 0, "channel_id": channel_id})
-        if episode > series_info["last_episode"]:
-            series_info["last_episode"] = episode
-        series_info["channel_id"] = channel_id
-        self.data["series"][series_name] = series_info
+        if series_name not in self.data["series"]:
+            self.data["series"][series_name] = {
+                "last_episode": 0,
+                "channel_id": channel_id,
+                "added_date": datetime.now().isoformat()
+            }
+        if episode > self.data["series"][series_name]["last_episode"]:
+            self.data["series"][series_name]["last_episode"] = episode
 
         # تسجيل الفيديو المرسل
         self.data["sent_videos"][file_unique_id] = {
@@ -70,37 +84,52 @@ class SeriesDatabase:
         }
         self.save()
 
-    def add_movie(self, movie_name: str, file_id: str, file_unique_id: str, channel_id: int) -> None:
-        """إضافة فيلم جديد."""
-        self.data["movies"][movie_name] = {
-            "file_id": file_id,
-            "channel_id": channel_id
-        }
-        self.data["sent_videos"][file_unique_id] = {
-            "movie_name": movie_name
-        }
-        self.save()
+    def get_series_list(self) -> List[str]:
+        return list(self.data["series"].keys())
 
-    def is_video_sent(self, file_unique_id: str) -> bool:
-        """التحقق مما إذا كان الفيديو قد أرسل من قبل باستخدام معرفه الفريد."""
-        return file_unique_id in self.data["sent_videos"]
+    def get_series_info(self, series_name: str) -> Optional[Dict]:
+        return self.data["series"].get(series_name)
 
-    def get_video_info(self, file_unique_id: str) -> Optional[Dict[str, Any]]:
-        """استرجاع معلومات فيديو تم إرساله مسبقاً."""
-        return self.data["sent_videos"].get(file_unique_id)
-
-    def get_series_last_episode(self, series_name: str) -> int:
-        """الحصول على رقم آخر حلقة تم إرسالها لمسلسل معين."""
+    def get_last_episode(self, series_name: str) -> int:
         return self.data["series"].get(series_name, {}).get("last_episode", 0)
 
-    def search_series_or_movie(self, query: str) -> Dict[str, Any]:
-        """البحث عن مسلسل أو فيلم باسمه (للاستخدام المستقبلي)."""
-        results = {"series": [], "movies": []}
-        query_lower = query.lower()
-        for series_name in self.data["series"]:
-            if query_lower in series_name.lower():
-                results["series"].append(series_name)
-        for movie_name in self.data["movies"]:
-            if query_lower in movie_name.lower():
-                results["movies"].append(movie_name)
-        return results
+    # ------------------ الأفلام ------------------
+    def add_movie(self, movie_name: str, file_id: str, file_unique_id: str, channel_id: int):
+        self.data["movies"][movie_name] = {
+            "file_id": file_id,
+            "channel_id": channel_id,
+            "added_date": datetime.now().isoformat()
+        }
+        self.data["sent_videos"][file_unique_id] = {"movie_name": movie_name}
+        self.save()
+
+    def get_movies_list(self) -> List[str]:
+        return list(self.data["movies"].keys())
+
+    def get_movie_info(self, movie_name: str) -> Optional[Dict]:
+        return self.data["movies"].get(movie_name)
+
+    # ------------------ التحقق من التكرار ------------------
+    def is_video_sent(self, file_unique_id: str) -> bool:
+        return file_unique_id in self.data["sent_videos"]
+
+    def get_video_info(self, file_unique_id: str) -> Optional[Dict]:
+        return self.data["sent_videos"].get(file_unique_id)
+
+    # ------------------ البحث ------------------
+    def search(self, query: str) -> Dict[str, List[str]]:
+        """البحث في المسلسلات والأفلام."""
+        query = query.lower()
+        result = {"series": [], "movies": []}
+        for s in self.data["series"]:
+            if query in s.lower():
+                result["series"].append(s)
+        for m in self.data["movies"]:
+            if query in m.lower():
+                result["movies"].append(m)
+        return result
+
+    # ------------------ المستخدمين (للبساطة نعتبر الجميع مشرفين) ------------------
+    def is_admin(self, user_id: int) -> bool:
+        # يمكنك تخصيص صلاحيات المشرفين هنا
+        return True  # للتبسيط، كل المستخدمين مشرفون
