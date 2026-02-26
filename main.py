@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ConversationHandler
+from telegram import Update
 import config
 import database as db
 import handlers
@@ -8,19 +9,39 @@ from admin import (ADD_SERIES_NAME, ADD_SERIES_VIDEOS, ADD_MOVIE_NAME, ADD_MOVIE
                    EDIT_SERIES_OLD, EDIT_SERIES_NEW, EDIT_MOVIE_OLD, EDIT_MOVIE_NEW,
                    DELETE_SERIES_NAME, DELETE_MOVIE_NAME, BROADCAST_MESSAGE,
                    BAN_USER_ID, UNBAN_USER_ID, ADD_REC_TITLE, ADD_REC_PHOTO, ADD_REC_DESC, DEL_REC_TITLE)
+import logging
+
+# إعداد التسجيل
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تسجيل الأخطاء وإعلام المطور."""
+    logger.error(msg="Exception while handling an update:", exc_info=context.error)
+    # يمكن إرسال رسالة للمدير
+    if update and update.effective_message:
+        await context.bot.send_message(
+            chat_id=config.ADMIN_ID,
+            text=f"حدث خطأ: {context.error}\n\nتحديث: {update}"
+        )
 
 def main():
-    # تهيئة قاعدة البيانات
     db.init_db()
 
     app = Application.builder().token(config.TOKEN).build()
+
+    # إضافة معالج الأخطاء
+    app.add_error_handler(error_handler)
 
     # ===== معالجات المستخدمين =====
     app.add_handler(CommandHandler("start", handlers.start))
     app.add_handler(CallbackQueryHandler(handlers.check_subscription_callback, pattern="^check_sub$"))
     app.add_handler(CallbackQueryHandler(handlers.check_invites_callback, pattern="^check_invites$"))
 
-    # القوائم الرئيسية
+    # القوائم الرئيسية (ملاحظة: ترتيب المعالجات مهم: الأكثر تحديداً أولاً)
     app.add_handler(CallbackQueryHandler(handlers.show_main_menu, pattern="^back_main$"))
     app.add_handler(CallbackQueryHandler(handlers.series_menu, pattern="^menu_series$"))
     app.add_handler(CallbackQueryHandler(handlers.movies_menu, pattern="^menu_movies$"))
@@ -46,7 +67,7 @@ def main():
     # التوصيات
     app.add_handler(CallbackQueryHandler(handlers.rec_navigation, pattern="^(rec_next|rec_prev)$"))
 
-    # أزرار الرجوع
+    # أزرار الرجوع العامة (يجب أن يكون بعد جميع الأنماط الأكثر تحديداً)
     app.add_handler(CallbackQueryHandler(handlers.back_callback, pattern="^back_"))
 
     # ===== معالجات البحث (محادثة) =====
@@ -83,7 +104,7 @@ def main():
     app.add_handler(CallbackQueryHandler(admin.add_rec_start, pattern="^admin_add_rec$"))
     app.add_handler(CallbackQueryHandler(admin.del_rec_start, pattern="^admin_del_rec$"))
 
-    # محادثات الإضافة
+    # محادثات الإضافة (ConversationHandlers)
     add_series_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin.add_series_start, pattern="^admin_add_series$")],
         states={
@@ -106,7 +127,6 @@ def main():
     )
     app.add_handler(add_movie_conv)
 
-    # تعديل مسلسل
     edit_series_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin.edit_series_start, pattern="^admin_edit_series$")],
         states={
@@ -117,7 +137,6 @@ def main():
     )
     app.add_handler(edit_series_conv)
 
-    # حذف مسلسل
     del_series_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin.delete_series_start, pattern="^admin_del_series$")],
         states={
@@ -127,7 +146,6 @@ def main():
     )
     app.add_handler(del_series_conv)
 
-    # تعديل فيلم
     edit_movie_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin.edit_movie_start, pattern="^admin_edit_movie$")],
         states={
@@ -138,7 +156,6 @@ def main():
     )
     app.add_handler(edit_movie_conv)
 
-    # حذف فيلم
     del_movie_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin.delete_movie_start, pattern="^admin_del_movie$")],
         states={
@@ -148,7 +165,6 @@ def main():
     )
     app.add_handler(del_movie_conv)
 
-    # إذاعة
     broadcast_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin.broadcast_start, pattern="^admin_broadcast$")],
         states={
@@ -158,7 +174,6 @@ def main():
     )
     app.add_handler(broadcast_conv)
 
-    # حظر
     ban_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin.ban_start, pattern="^admin_ban$")],
         states={
@@ -168,7 +183,6 @@ def main():
     )
     app.add_handler(ban_conv)
 
-    # رفع حظر
     unban_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin.unban_start, pattern="^admin_unban$")],
         states={
@@ -178,7 +192,6 @@ def main():
     )
     app.add_handler(unban_conv)
 
-    # تعيين عدد الدعوات
     set_invite_count_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin.set_invite_count_start, pattern="^admin_set_invite_count$")],
         states={
@@ -188,7 +201,6 @@ def main():
     )
     app.add_handler(set_invite_count_conv)
 
-    # تعيين قنوات
     set_series_ch_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin.set_series_channel_start, pattern="^admin_set_series_ch$")],
         states={
@@ -207,7 +219,6 @@ def main():
     )
     app.add_handler(set_movies_ch_conv)
 
-    # تمويل قناة
     funding_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin.funding_start, pattern="^admin_funding$")],
         states={
@@ -218,7 +229,6 @@ def main():
     )
     app.add_handler(funding_conv)
 
-    # إضافة توصية
     add_rec_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin.add_rec_start, pattern="^admin_add_rec$")],
         states={
@@ -230,7 +240,6 @@ def main():
     )
     app.add_handler(add_rec_conv)
 
-    # حذف توصية
     del_rec_conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(admin.del_rec_start, pattern="^admin_del_rec$")],
         states={
@@ -240,8 +249,7 @@ def main():
     )
     app.add_handler(del_rec_conv)
 
-    # بدء البوت
-    print("البوت يعمل...")
+    print("✅ البوت يعمل...")
     app.run_polling()
 
 if __name__ == "__main__":
