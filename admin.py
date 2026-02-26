@@ -17,7 +17,7 @@ import asyncio
  DEL_REC_TITLE,
  SET_SERIES_CH, SET_MOVIES_CH, SET_RECOMMENDATIONS_CH,
  FUNDING_CH, FUNDING_COUNT,
- SET_INVITE_COUNT) = range(23)  # تم التصحيح من 24 إلى 23
+ SET_INVITE_COUNT) = range(23)
 
 # ================== لوحة الإدارة الرئيسية ==================
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -377,6 +377,7 @@ async def set_series_channel_start(update: Update, context: ContextTypes.DEFAULT
 async def set_series_channel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         ch = update.message.text.strip()
+        # يمكن إضافة تحقق هنا إذا أردت
         db.set_channel('series_channel', ch)
         await update.message.reply_text("✅ تم تعيين قناة المسلسلات.")
     except Exception as e:
@@ -537,4 +538,4 @@ async def admin_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ تم الإلغاء.")
-    return ConversationHandler.END 
+    return ConversationHandler.END
