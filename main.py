@@ -11,6 +11,7 @@ from admin import (ADD_SERIES_NAME, ADD_SERIES_VIDEOS, ADD_MOVIE_NAME, ADD_MOVIE
                    BAN_USER_ID, UNBAN_USER_ID, ADD_REC_TITLE, ADD_REC_PHOTO, ADD_REC_DESC, DEL_REC_TITLE,
                    SET_SERIES_CH, SET_MOVIES_CH, SET_RECOMMENDATIONS_CH, FUNDING_CH, FUNDING_COUNT, SET_INVITE_COUNT)
 import logging
+import asyncio
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -28,16 +29,27 @@ async def backup_job(context):
     await db.backup_to_channel(context)
 
 async def restore_if_empty_job(context):
-    """مهمة لاسترجاع قاعدة البيانات إذا كانت فارغة (تُنفذ بعد بدء البوت)"""
+    """مهمة لاسترجاع قاعدة البيانات إذا كانت فارغة"""
     if db.is_db_empty():
-        print("🔄 قاعدة البيانات فارغة، جاري محاولة الاسترجاع...")
+        logger.info("🔄 قاعدة البيانات فارغة، جاري محاولة الاسترجاع...")
         await db.restore_from_channel(context.bot)
     else:
-        print("✅ قاعدة البيانات موجودة ومليئة.")
+        logger.info("✅ قاعدة البيانات موجودة ومليئة.")
+
+async def backup_loop_fallback(app):
+    """دورة لا نهائية لعمل نسخة احتياطية كل ساعتين (بديل بدون JobQueue)"""
+    await asyncio.sleep(10)
+    while True:
+        try:
+            await db.backup_to_channel(app.bot)
+            logger.info("✅ تم إنشاء نسخة احتياطية جديدة (fallback).")
+        except Exception as e:
+            logger.error(f"❌ فشل النسخ الاحتياطي: {e}")
+        await asyncio.sleep(7200)
 
 def main():
     db.init_db()
-    db.init_default_channels()  # تعيين القنوات الافتراضية
+    db.init_default_channels()
 
     app = Application.builder().token(config.TOKEN).build()
     app.add_error_handler(error_handler)
@@ -247,15 +259,41 @@ def main():
     )
     app.add_handler(del_rec_conv)
 
-    # جدولة النسخ الاحتياطي كل ساعتين
-    job_queue = app.job_queue
-    job_queue.run_repeating(backup_job, interval=7200, first=10)  # 7200 ثانية = ساعتين
-
-    # جدولة استرجاع البيانات بعد 5 ثوانٍ من بدء البوت (للتأكد من وجود حلقة أحداث)
-    job_queue.run_once(restore_if_empty_job, when=5)
+    # ===== إعداد النسخ الاحتياطي =====
+    # التحقق من وجود JobQueue (أي تثبيت الحزمة الإضافية)
+    if app.job_queue:
+        # استخدام JobQueue
+        app.job_queue.run_once(restore_if_empty_job, when=5)
+        app.job_queue.run_repeating(backup_job, interval=7200, first=10)
+        logger.info("✅ JobQueue نشط - سيتم استخدامه للنسخ الاحتياطي.")
+    else:
+        # البديل: استخدام asyncio.create_task
+        logger.warning("⚠️ JobQueue غير متوفر. جاري تشغيل النسخ الاحتياطي عبر asyncio.create_task (قد يكون أقل كفاءة). يوصى بتثبيت python-telegram-bot[job-queue]")
+        loop = asyncio.get_event_loop()
+        loop.create_task(restore_if_empty_fallback(app))
+        loop.create_task(backup_loop_fallback(app))
 
     print("✅ البوت يعمل...")
     app.run_polling()
+
+# دوال البديل (تُستخدم فقط إذا لم يكن JobQueue متاحاً)
+async def restore_if_empty_fallback(app):
+    await asyncio.sleep(5)
+    if db.is_db_empty():
+        logger.info("🔄 قاعدة البيانات فارغة، جاري محاولة الاسترجاع...")
+        await db.restore_from_channel(app.bot)
+    else:
+        logger.info("✅ قاعدة البيانات موجودة ومليئة.")
+
+async def backup_loop_fallback(app):
+    await asyncio.sleep(10)
+    while True:
+        try:
+            await db.backup_to_channel(app.bot)
+            logger.info("✅ تم إنشاء نسخة احتياطية جديدة (fallback).")
+        except Exception as e:
+            logger.error(f"❌ فشل النسخ الاحتياطي: {e}")
+        await asyncio.sleep(7200)
 
 if __name__ == "__main__":
     main() 
