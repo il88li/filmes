@@ -1,3 +1,6 @@
+import os
+import time
+from telegram import InputFile 
 import sqlite3
 import threading
 from config import DB_NAME, DEFAULT_SERIES_CHANNEL, DEFAULT_MOVIES_CHANNEL, DEFAULT_RECOMMENDATIONS_CHANNEL
@@ -342,3 +345,67 @@ def init_default_channels():
     if not get_channel('recommendations_channel'):
         set_recommendations_channel(DEFAULT_RECOMMENDATIONS_CHANNEL)
         print(f"✅ تم تعيين قناة التوصيات الافتراضية: {DEFAULT_RECOMMENDATIONS_CHANNEL}") 
+
+# ===== دوال النسخ الاحتياطي والاستعادة =====
+def is_db_empty():
+    """التحقق مما إذا كانت قاعدة البيانات جديدة (لا يوجد مستخدمون)"""
+    conn = get_connection()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM users")
+    count = c.fetchone()[0]
+    conn.close()
+    return count == 0
+
+async def backup_to_channel(context):
+    """رفع نسخة من قاعدة البيانات إلى قناة النسخ الاحتياطي"""
+    from config import BACKUP_CHANNEL_ID
+    backup_channel = BACKUP_CHANNEL_ID
+    db_file = DB_NAME
+    if not os.path.exists(db_file):
+        print("⚠️ ملف قاعدة البيانات غير موجود، لا يمكن النسخ.")
+        return
+    try:
+        with open(db_file, 'rb') as f:
+            await context.bot.send_document(
+                chat_id=backup_channel,
+                document=InputFile(f, filename=f"backup_{int(time.time())}.db"),
+                caption=f"📦 نسخة احتياطية - {time.strftime('%Y-%m-%d %H:%M:%S')}"
+            )
+        print("✅ تم إنشاء نسخة احتياطية جديدة.")
+        # تنظيف النسخ القديمة (اختياري)
+        await clean_old_backups(context, backup_channel)
+    except Exception as e:
+        print(f"❌ فشل النسخ الاحتياطي: {e}")
+
+async def clean_old_backups(context, channel, keep=5):
+    """حذف النسخ القديمة والاحتفاظ بآخر keep نسخة"""
+    try:
+        messages = []
+        async for msg in context.bot.iter_history(chat_id=channel, limit=50):
+            if msg.document and msg.document.file_name and msg.document.file_name.startswith('backup_'):
+                messages.append(msg)
+        # ترتيب حسب التاريخ (الأحدث أولاً)
+        messages.sort(key=lambda m: m.date, reverse=True)
+        for msg in messages[keep:]:
+            await context.bot.delete_message(chat_id=channel, message_id=msg.message_id)
+            print(f"🗑️ تم حذف نسخة قديمة: {msg.document.file_name}")
+    except Exception as e:
+        print(f"⚠️ خطأ في تنظيف النسخ: {e}")
+
+async def restore_from_channel(context):
+    """استرجاع آخر نسخة احتياطية من القناة"""
+    from config import BACKUP_CHANNEL_ID
+    backup_channel = BACKUP_CHANNEL_ID
+    try:
+        # البحث عن آخر رسالة تحتوي على ملف backup
+        async for msg in context.bot.iter_history(chat_id=backup_channel, limit=10):
+            if msg.document and msg.document.file_name and msg.document.file_name.startswith('backup_'):
+                file = await context.bot.get_file(msg.document.file_id)
+                await file.download_to_drive(DB_NAME)
+                print(f"✅ تم استرجاع قاعدة البيانات من نسخة: {msg.document.file_name}")
+                return True
+        print("⚠️ لم يتم العثور على أي نسخة احتياطية.")
+        return False
+    except Exception as e:
+        print(f"❌ فشل الاسترجاع: {e}")
+        return False
