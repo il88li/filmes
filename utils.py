@@ -1,75 +1,51 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes
-import config
-import database as db
-from functools import wraps
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from config import CHANNEL_USERNAME, BOT_USERNAME
+import telebot
 
-async def is_admin(user_id: int) -> bool:
-    return user_id == config.ADMIN_ID
+def pagination_keyboard(items, page, prefix, user_id, per_page=5):
+    total_pages = (len(items) + per_page - 1) // per_page
+    start = page * per_page
+    end = start + per_page
+    kb = InlineKeyboardMarkup(row_width=1)
+    for item in items[start:end]:
+        kb.add(InlineKeyboardButton(item, callback_data=f"{prefix}:{item}:{page}"))
+    if page > 0:
+        kb.add(InlineKeyboardButton("السابق", callback_data=f"{prefix}:prev:{page-1}"))
+    if page < total_pages - 1:
+        kb.add(InlineKeyboardButton("التالي", callback_data=f"{prefix}:next:{page}"))
+    kb.add(InlineKeyboardButton("رجوع", callback_data=f"back_main:{user_id}"))
+    return kb
 
-async def check_subscription(user_id: int, context: ContextTypes.DEFAULT_TYPE, channel: str = None) -> bool:
-    if channel is None:
-        channel = config.FORCE_CHANNEL
-    try:
-        member = await context.bot.get_chat_member(chat_id=channel, user_id=user_id)
-        return member.status in ['member', 'administrator', 'creator']
-    except Exception:
-        return False
+def episode_keyboard(series_name, episode, total, user_id):
+    kb = InlineKeyboardMarkup()
+    if episode > 1:
+        kb.row(InlineKeyboardButton("السابقة", callback_data=f"ep:{series_name}:{episode-1}"))
+    if episode < total:
+        kb.row(InlineKeyboardButton("التالية", callback_data=f"ep:{series_name}:{episode+1}"))
+    kb.row(
+        InlineKeyboardButton("تقييم وملاحظة", callback_data=f"rate:{series_name}"),
+        InlineKeyboardButton("ابلاغ", callback_data=f"report:{series_name}")
+    )
+    kb.add(InlineKeyboardButton("العودة للقائمة الرئيسية", callback_data=f"back_main:{user_id}"))
+    return kb
 
-async def force_subscribe_markup():
-    keyboard = [
-        [InlineKeyboardButton("📢 اشترك في القناة", url=config.FORCE_CHANNEL_LINK)],
-        [InlineKeyboardButton("✅ تحقق من الاشتراك", callback_data="check_sub")]
-    ]
-    return InlineKeyboardMarkup(keyboard)
+def main_menu(user_id, is_admin=False):
+    kb = InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        InlineKeyboardButton("مسلسلات", callback_data="menu_series"),
+        InlineKeyboardButton("افلام عربي", callback_data="menu_movies")
+    )
+    kb.row(
+        InlineKeyboardButton("بحث", callback_data="menu_search"),
+        InlineKeyboardButton("توصيات", callback_data="menu_recommendations")
+    )
+    kb.row(
+        InlineKeyboardButton("دعم البوت بالنجوم", callback_data="menu_support")
+    )
+    if is_admin:
+        kb.row(InlineKeyboardButton("اداره", callback_data="menu_admin"))
+    kb.add(InlineKeyboardButton("رجوع", callback_data="back_main"))
+    return kb
 
-def back_button(callback_data: str = "back"):
-    return [InlineKeyboardButton("🔙 رجوع", callback_data=callback_data)]
-
-def build_menu(buttons, n_cols=1, header_buttons=None, footer_buttons=None):
-    menu = [buttons[i:i + n_cols] for i in range(0, len(buttons), n_cols)]
-    if header_buttons:
-        menu.insert(0, header_buttons if isinstance(header_buttons, list) else [header_buttons])
-    if footer_buttons:
-        menu.append(footer_buttons if isinstance(footer_buttons, list) else [footer_buttons])
-    return menu
-
-async def user_can_access(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    if await is_admin(user_id):
-        return True
-
-    if not await check_subscription(user_id, context):
-        return False
-
-    user = db.get_user(user_id)
-    if not user or user[3] == 1:  # محظور
-        return False
-
-    invite_enabled = db.get_invite_setting('enabled') == 'true'
-    if invite_enabled and user[7] == 0:  # can_use_bot
-        return False
-
-    return True
-
-def ensure_subscribed(func):
-    @wraps(func)
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
-        user = update.effective_user
-        if not await user_can_access(user.id, context):
-            if not await check_subscription(user.id, context):
-                await update.effective_message.reply_text(
-                    "❗ يرجى الاشتراك في القناة أولاً لاستخدام البوت.",
-                    reply_markup=await force_subscribe_markup()
-                )
-            else:
-                await update.effective_message.reply_text(
-                    "⚠️ تحتاج إلى دعوة 5 أشخاص لاستخدام البوت. استخدم /start لعرض رابط الدعوة."
-                )
-            return
-        return await func(update, context, *args, **kwargs)
-    return wrapper
-
-def split_list(lst, page, page_size=10):
-    start = page * page_size
-    end = start + page_size
-    return lst[start:end], len(lst) > end
+def get_referral_link(user_id):
+    return f"https://t.me/{BOT_USERNAME[1:]}?start={user_id}"
