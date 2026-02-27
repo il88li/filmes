@@ -1,6 +1,5 @@
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from config import CHANNEL_USERNAME, BOT_USERNAME
-import telebot
+from config import BOT_USERNAME
 
 def pagination_keyboard(items, page, prefix, user_id, per_page=5):
     total_pages = (len(items) + per_page - 1) // per_page
@@ -31,21 +30,28 @@ def episode_keyboard(series_name, episode, total, user_id):
 
 def main_menu(user_id, is_admin=False):
     kb = InlineKeyboardMarkup(row_width=2)
-    kb.add(
-        InlineKeyboardButton("مسلسلات", callback_data="menu_series"),
-        InlineKeyboardButton("افلام عربي", callback_data="menu_movies")
-    )
-    kb.row(
-        InlineKeyboardButton("بحث", callback_data="menu_search"),
-        InlineKeyboardButton("توصيات", callback_data="menu_recommendations")
-    )
-    kb.row(
-        InlineKeyboardButton("دعم البوت بالنجوم", callback_data="menu_support")
-    )
+    kb.add(InlineKeyboardButton("مسلسلات", callback_data="menu_series"),
+           InlineKeyboardButton("افلام عربي", callback_data="menu_movies"))
+    kb.row(InlineKeyboardButton("بحث", callback_data="menu_search"),
+           InlineKeyboardButton("توصيات", callback_data="menu_recommendations"))
+    kb.row(InlineKeyboardButton("دعم البوت بالنجوم", callback_data="menu_support"))
     if is_admin:
         kb.row(InlineKeyboardButton("اداره", callback_data="menu_admin"))
-    kb.add(InlineKeyboardButton("رجوع", callback_data="back_main"))
     return kb
 
 def get_referral_link(user_id):
     return f"https://t.me/{BOT_USERNAME[1:]}?start={user_id}"
+
+def rating_keyboard(series_name):
+    kb = InlineKeyboardMarkup(row_width=5)
+    for i in range(1, 11):
+        kb.add(InlineKeyboardButton(f"{i} ⭐", callback_data=f"rating:{series_name}:{i}"))
+    kb.add(InlineKeyboardButton("رجوع", callback_data=f"back_main"))
+    return kb
+
+def search_keyboard(items):
+    kb = InlineKeyboardMarkup(row_width=1)
+    for item in items[:10]:
+        kb.add(InlineKeyboardButton(item, callback_data=f"search:{item}"))
+    kb.add(InlineKeyboardButton("رجوع", callback_data="back_main"))
+    return kb
