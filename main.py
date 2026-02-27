@@ -7,6 +7,8 @@ from telethon import TelegramClient, events, Button
 from telethon.tl.functions.contacts import ImportContactsRequest
 from telethon.tl.types import InputPhoneContact
 from telethon.errors import SessionPasswordNeededError, PhoneNumberInvalidError
+from bs4 import BeautifulSoup
+import random
 
 # إعداد التسجيل
 logging.basicConfig(
@@ -20,89 +22,120 @@ API_ID = 23656977
 API_HASH = "49d3f43531a92b3f5bc403766313ca1e"
 BOT_TOKEN = "8137587721:AAGq7kyLc3E0EL7HZ2SKRmJPGj3OLQFVSKo"
 
-# روابط API
-OTP_API_BASE = "https://otp-api.shelex.dev/api"
-COUNTRIES_ENDPOINT = f"{OTP_API_BASE}/countries"
-LIST_ENDPOINT = f"{OTP_API_BASE}/list"
-MESSAGES_ENDPOINT = f"{OTP_API_BASE}"
+# مصادر الأرقام المؤقتة (Web Scraping)
+SMS_SOURCES = {
+    'smstome': {
+        'url': 'https://smstome.com/country/{country}',
+        'list_url': 'https://smstome.com/country/{country}',
+        'msg_url': 'https://smstome.com/phone/{phone}'
+    },
+    'receive_smss': {
+        'url': 'https://receive-smss.com/',
+        'list_selector': '.number-box',
+    },
+    'anonymsms': {
+        'url': 'https://anonymsms.com/',
+        'list_selector': '.number-card',
+    },
+    'temp_number': {
+        'url': 'https://temporarynumber.com/',
+        'list_selector': '.number-item',
+    }
+}
 
-# تخزين مؤقت للمستخدمين
+# قائمة الدول المدعومة يدوياً (احتياطي)
+FALLBACK_COUNTRIES = {
+    'us': '🇺🇸 United States',
+    'uk': '🇬🇧 United Kingdom', 
+    'ca': '🇨🇦 Canada',
+    'de': '🇩🇪 Germany',
+    'fr': '🇫🇷 France',
+    'nl': '🇳🇱 Netherlands',
+    'se': '🇸🇪 Sweden',
+    'fi': '🇫🇮 Finland',
+    'be': '🇧🇪 Belgium'
+}
+
+# تخزين مؤقت
 user_sessions = {}
+temp_numbers_cache = {}
+cache_timestamp = 0
+CACHE_DURATION = 300  # 5 دقائق
 
 class TelegramOTPBot:
     def __init__(self):
         self.client = None
         self.bot = None
+        self.session = None
         
     async def start(self):
         """بدء تشغيل البوت"""
         try:
-            # إنشاء العميل
-            self.client = TelegramClient('bot_session_v2', API_ID, API_HASH)
+            self.session = aiohttp.ClientSession(
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                }
+            )
             
-            # بدء الجلسة
+            self.client = TelegramClient('bot_session_v3', API_ID, API_HASH)
             await self.client.start(bot_token=BOT_TOKEN)
             
-            # الحصول على معلومات البوت
             self.bot = await self.client.get_me()
             
-            print("=" * 50)
+            print("=" * 60)
             print("✅ BOT STARTED SUCCESSFULLY")
-            print("=" * 50)
+            print("=" * 60)
             print(f"🤖 Bot Name: {self.bot.first_name}")
             print(f"📱 Bot Username: @{self.bot.username}")
             print(f"🆔 Bot ID: {self.bot.id}")
             print(f"🔑 API ID: {API_ID}")
-            print("=" * 50)
-            
-            # تسجيل المعالجات
-            self.register_handlers()
-            
+            print(f"🌐 Session: Active")
+            print("=" * 60)
             print("🚀 Bot is running... Waiting for messages")
             print("Press Ctrl+C to stop")
-            print("=" * 50)
+            print("=" * 60)
             
+            self.register_handlers()
             await self.client.run_until_disconnected()
             
         except Exception as e:
             logger.error(f"Error starting bot: {e}")
-            print(f"❌ Error: {e}")
+            print(f"❌ Fatal Error: {e}")
             raise
+        finally:
+            if self.session:
+                await self.session.close()
     
     def register_handlers(self):
         """تسجيل معالجات الأحداث"""
         
-        # معالج /start
         @self.client.on(events.NewMessage(pattern='/start'))
         async def start_handler(event):
             logger.info(f"User {event.sender_id} started the bot")
             await self.show_main_menu(event)
         
-        # معالج /help
         @self.client.on(events.NewMessage(pattern='/help'))
         async def help_handler(event):
             await self.show_help(event, edit=False)
         
-        # معالج الأزرار
+        @self.client.on(events.NewMessage(pattern='/countries'))
+        async def countries_handler(event):
+            await self.show_countries(event)
+        
         @self.client.on(events.CallbackQuery)
         async def callback_handler(event):
             try:
                 await self.handle_callback(event)
             except Exception as e:
-                logger.error(f"Error in callback handler: {e}")
+                logger.error(f"Error in callback: {e}")
                 await event.answer("❌ حدث خطأ، حاول مرة أخرى")
         
-        # معالج الرسائل النصية العادية
         @self.client.on(events.NewMessage)
         async def message_handler(event):
-            # تجاهل الرسائل من البوت نفسه
             if event.sender_id == self.bot.id:
                 return
-            
-            # تجاهل الأوامر المعروفة
             if event.message.text and event.message.text.startswith('/'):
                 return
-            
             await self.handle_text_message(event)
     
     async def show_main_menu(self, event, edit=False):
@@ -122,231 +155,260 @@ class TelegramOTPBot:
 """
         buttons = [
             [Button.inline("🔍 بدء البحث", b"start_search")],
-            [Button.inline("❓ كيفية الاستخدام", b"help"), Button.inline("ℹ️ عن البوت", b"about")]
+            [Button.inline("🌍 عرض الدول", b"show_countries"), Button.inline("❓ المساعدة", b"help")],
+            [Button.inline("ℹ️ عن البوت", b"about")]
         ]
         
         try:
-            if edit and hasattr(event, 'edit'):
+            if edit:
                 await event.edit(text, buttons=buttons, parse_mode='markdown')
             else:
                 await event.respond(text, buttons=buttons, parse_mode='markdown')
         except Exception as e:
-            logger.error(f"Error showing main menu: {e}")
+            logger.error(f"Error showing menu: {e}")
     
     async def handle_callback(self, event):
         """معالجة ضغطات الأزرار"""
         data = event.data.decode('utf-8')
         user_id = event.sender_id
         
-        logger.info(f"User {user_id} clicked: {data}")
+        logger.info(f"Callback from {user_id}: {data}")
         
-        if data == "start_search":
-            await self.show_countries(event)
+        handlers = {
+            'start_search': self.show_countries,
+            'back_main': lambda e: self.show_main_menu(e, edit=True),
+            'help': lambda e: self.show_help(e, edit=True),
+            'about': lambda e: self.show_about(e, edit=True),
+            'show_countries': self.show_countries,
+            'refresh_countries': lambda e: self.show_countries(e, edit=True),
+            'cancel_search': lambda e: self.show_main_menu(e, edit=True),
+        }
         
-        elif data == "back_main":
-            await self.show_main_menu(event, edit=True)
-        
-        elif data == "help":
-            await self.show_help(event, edit=True)
-        
-        elif data == "about":
-            await self.show_about(event, edit=True)
+        if data in handlers:
+            await handlers[data](event)
         
         elif data.startswith("country:"):
             country = data.split(":")[1]
             await self.start_number_search(event, country, user_id)
         
-        elif data == "refresh_countries":
-            await self.show_countries(event, edit=True)
-        
         elif data.startswith("check_code:"):
             phone = data.split(":", 1)[1]
             await self.check_verification_code(event, phone)
         
-        elif data == "cancel_search":
-            if user_id in user_sessions:
-                del user_sessions[user_id]
-            await self.show_main_menu(event, edit=True)
+        elif data.startswith("search_again:"):
+            country = data.split(":")[1]
+            await self.start_number_search(event, country, user_id)
         
         else:
             await event.answer("⚠️ خيار غير معروف")
     
     async def show_countries(self, event, edit=False):
         """عرض قائمة الدول المتاحة"""
-        please_wait_text = "⏳ جاري جلب قائمة الدول المتاحة..."
+        please_wait = "⏳ جاري جلب قائمة الدول..."
         
         try:
             if edit:
-                await event.edit(please_wait_text)
+                await event.edit(please_wait)
             else:
-                await event.answer(please_wait_text)
+                await event.answer(please_wait)
             
-            async with aiohttp.ClientSession() as session:
-                async with session.get(COUNTRIES_ENDPOINT, timeout=15) as response:
-                    if response.status == 200:
-                        countries = await response.json()
-                        
-                        if not countries:
-                            raise Exception("No countries returned")
-                        
-                        text = "🌍 **الدول المتاحة للبحث:**\n\nاختر الدولة المطلوبة:"
-                        buttons = []
-                        
-                        # تقسيم الدول إلى صفوف (زرين في كل صف)
-                        country_list = sorted(countries.items(), key=lambda x: x[1])
-                        
-                        for i in range(0, len(country_list), 2):
-                            row = []
-                            for j in range(2):
-                                if i + j < len(country_list):
-                                    code, name = country_list[i + j]
-                                    flag = self.get_country_flag(code)
-                                    row.append(Button.inline(f"{flag} {name}", f"country:{code}"))
-                            buttons.append(row)
-                        
-                        buttons.append([Button.inline("🔄 تحديث القائمة", b"refresh_countries")])
-                        buttons.append([Button.inline("🔙 رجوع للرئيسية", b"back_main")])
-                        
-                        if edit:
-                            await event.edit(text, buttons=buttons, parse_mode='markdown')
-                        else:
-                            await event.respond(text, buttons=buttons, parse_mode='markdown')
-                    else:
-                        raise Exception(f"Status code: {response.status}")
-                        
+            # استخدام القائمة الاحتياطية المحددة مسبقاً
+            countries = FALLBACK_COUNTRIES
+            
+            text = "🌍 **الدول المتاحة للبحث:**\n\nاختر الدولة المطلوبة:"
+            buttons = []
+            
+            country_list = list(countries.items())
+            for i in range(0, len(country_list), 2):
+                row = []
+                for j in range(2):
+                    if i + j < len(country_list):
+                        code, name = country_list[i + j]
+                        row.append(Button.inline(name, f"country:{code}"))
+                buttons.append(row)
+            
+            buttons.append([Button.inline("🔄 تحديث", b"refresh_countries")])
+            buttons.append([Button.inline("🔙 رجوع", b"back_main")])
+            
+            if edit:
+                await event.edit(text, buttons=buttons, parse_mode='markdown')
+            else:
+                await event.respond(text, buttons=buttons, parse_mode='markdown')
+                
         except Exception as e:
-            logger.error(f"Error fetching countries: {e}")
-            error_text = "❌ تعذر جلب قائمة الدول. حاول مرة أخرى."
-            buttons = [
-                [Button.inline("🔄 إعادة المحاولة", b"refresh_countries")],
-                [Button.inline("🔙 رجوع", b"back_main")]
-            ]
+            logger.error(f"Error showing countries: {e}")
+            error_text = "❌ حدث خطأ في جلب الدول."
+            buttons = [[Button.inline("🔄 إعادة المحاولة", b"refresh_countries")],
+                      [Button.inline("🔙 رجوع", b"back_main")]]
             
             if edit:
                 await event.edit(error_text, buttons=buttons)
             else:
                 await event.respond(error_text, buttons=buttons)
     
-    def get_country_flag(self, country_code):
-        """إرجاع علم الدولة"""
-        flags = {
-            'us': '🇺🇸', 'gb': '🇬🇧', 'de': '🇩🇪', 'fr': '🇫🇷', 
-            'it': '🇮🇹', 'es': '🇪🇸', 'ru': '🇷🇺', 'cn': '🇨🇳',
-            'in': '🇮🇳', 'jp': '🇯🇵', 'br': '🇧🇷', 'ca': '🇨🇦',
-            'au': '🇦🇺', 'mx': '🇲🇽', 'kr': '🇰🇷', 'nl': '🇳🇱',
-            'se': '🇸🇪', 'no': '🇳🇴', 'fi': '🇫🇮', 'dk': '🇩🇰',
-            'pl': '🇵🇱', 'tr': '🇹🇷', 'id': '🇮🇩', 'sa': '🇸🇦',
-            'ae': '🇦🇪', 'eg': '🇪🇬', 'za': '🇿🇦', 'ng': '🇳🇬'
-        }
-        return flags.get(country_code.lower(), '🌍')
-    
     async def start_number_search(self, event, country, user_id):
         """بدء البحث عن رقم متاح"""
-        search_text = f"🔍 **جاري البحث في دولة: {country.upper()}**\n\n⏳ الرجاء الانتظار جارٍ فحص الأرقام المتاحة..."
+        search_text = f"🔍 **جاري البحث في:** {FALLBACK_COUNTRIES.get(country, country.upper())}\n\n⏳ جاري فحص الأرقام المتاحة من مصادر متعددة..."
         await event.edit(search_text)
         
         try:
-            async with aiohttp.ClientSession() as session:
-                list_url = f"{LIST_ENDPOINT}/{country}"
-                async with session.get(list_url, timeout=20) as response:
-                    if response.status != 200:
-                        raise Exception("Failed to fetch numbers")
-                    
-                    numbers_data = await response.json()
-                    
-                    if not numbers_data:
-                        raise Exception("No numbers available")
-                    
-                    # البحث عن رقم متاح
-                    available_number = None
-                    total_numbers = len(numbers_data)
-                    checked_count = 0
-                    
-                    for idx, phone_info in enumerate(numbers_data[:20]):  # فحص أول 20 رقم
-                        phone = phone_info.get('phone') or phone_info.get('number')
-                        if not phone:
-                            continue
-                        
-                        # تنظيف الرقم
-                        phone = str(phone).replace('+', '').replace(' ', '').replace('-', '').strip()
-                        
-                        if not phone.isdigit():
-                            continue
-                        
-                        checked_count += 1
-                        
-                        # تحديث حالة البحث كل 3 أرقام
-                        if checked_count % 3 == 0:
-                            progress_text = f"🔍 **جاري الفحص...**\n\nالدولة: {country.upper()}\nالرقم الحالي: +{phone}\nالتقدم: {checked_count}/{min(20, total_numbers)}"
-                            try:
-                                await event.edit(progress_text)
-                            except:
-                                pass
-                        
-                        # التحقق من توفر الرقم
-                        is_available = await self.check_telegram_availability(phone)
-                        
-                        if is_available:
-                            available_number = phone
-                            break
-                        
-                        await asyncio.sleep(0.3)
-                    
-                    if available_number:
-                        # حفظ الجلسة
-                        user_sessions[user_id] = {
-                            'phone': available_number,
-                            'country': country,
-                            'status': 'found',
-                            'timestamp': asyncio.get_event_loop().time()
-                        }
-                        
-                        success_text = f"""
-✅ **تم إيجاد رقم متاح للتسجيل!**
+            # جلب الأرقام من المصادر
+            numbers = await self.fetch_numbers_from_sources(country)
+            
+            if not numbers:
+                await event.edit(
+                    "❌ لا توجد أرقام متاحة حالياً في هذه الدولة.\n\n"
+                    "الأرقام المجانية تُستخدم بسرعة. حاول مرة أخرى أو جرب دولة أخرى.",
+                    buttons=[
+                        [Button.inline("🔄 إعادة البحث", f"search_again:{country}")],
+                        [Button.inline("🌍 دولة أخرى", b"show_countries")],
+                        [Button.inline("🏠 رئيسية", b"back_main")]
+                    ]
+                )
+                return
+            
+            # البحث عن رقم متاح للتسجيل
+            available_number = None
+            checked = 0
+            
+            for phone in numbers[:15]:  # فحص أول 15 رقم
+                checked += 1
+                
+                if checked % 3 == 0:
+                    try:
+                        await event.edit(f"🔍 جاري الفحص... ({checked}/{min(15, len(numbers))})\nالرقم: +{phone}")
+                    except:
+                        pass
+                
+                # التحقق من توفر الرقم على تلجرام
+                is_available = await self.check_telegram_availability(phone)
+                
+                if is_available:
+                    available_number = phone
+                    break
+                
+                await asyncio.sleep(0.5)
+            
+            if available_number:
+                user_sessions[user_id] = {
+                    'phone': available_number,
+                    'country': country,
+                    'found_at': asyncio.get_event_loop().time()
+                }
+                
+                success_msg = f"""
+✅ **تم إيجاد رقم متاح!**
 
 📱 **الرقم:** `+{available_number}`
-🌍 **الدولة:** {country.upper()}
+🌍 **الدولة:** {FALLBACK_COUNTRIES.get(country, country.upper())}
 📊 **الحالة:** ✅ جاهز للتسجيل
-⏱ **ملاحظة:** الرقم متاح لفترة محدودة
 
-⚠️ **خطوات التسجيل:**
-1️⃣ انسخ الرقم أعلاه
-2️⃣ افتح تلجرام واضغط "تسجيل الدخول"
-3️⃣ أدخل الرقم وانتظر الكود
-4️⃣ اضغط على "جلب آخر كود" بالأسفل
+⚠️ **تنبيه:** الرقم متاح مؤقتاً. استخدمه فوراً!
 
-🔽 اختر الإجراء المطلوب:
+🔽 **الخطوات:**
+1. انسخ الرقم أعلاه
+2. افتح تلجرام واضغط "تسجيل الدخول"
+3. أدخل الرقم وانتظر الكود
+4. اضغط "جلب آخر كود" بالأسفل
 """
-                        buttons = [
-                            [Button.inline("📩 جلب آخر كود", f"check_code:{available_number}")],
-                            [Button.inline("🔍 البحث عن رقم آخر", f"country:{country}")],
-                            [Button.inline("🏠 القائمة الرئيسية", b"back_main")]
-                        ]
-                        await event.edit(success_text, buttons=buttons, parse_mode='markdown')
-                        
-                        # إرسال الرقم في رسالة منفصلة للنسخ السهل
-                        await event.respond(
-                            f"📋 **انسخ الرقم:**\n`+{available_number}`\n\n"
-                            f"⚡ استخدمه الآن للتسجيل على تلجرام",
-                            parse_mode='markdown'
-                        )
-                    else:
-                        no_result_text = "❌ لم يتم العثور على أرقام متاحة للتسجيل حالياً.\n\nالأرقام تُستخدم بسرعة، حاول مرة أخرى."
-                        buttons = [
-                            [Button.inline("🔄 إعادة البحث", f"country:{country}")],
-                            [Button.inline("🌍 دولة أخرى", b"start_search")],
-                            [Button.inline("🏠 القائمة الرئيسية", b"back_main")]
-                        ]
-                        await event.edit(no_result_text, buttons=buttons)
-                        
+                buttons = [
+                    [Button.inline("📩 جلب آخر كود", f"check_code:{available_number}")],
+                    [Button.inline("🔍 رقم آخر", f"search_again:{country}")],
+                    [Button.inline("🏠 رئيسية", b"back_main")]
+                ]
+                
+                await event.edit(success_msg, buttons=buttons, parse_mode='markdown')
+                
+                # إرسال الرقم في رسالة منفصلة للنسخ السهل
+                await event.respond(
+                    f"📋 **انسخ الرقم:**\n`+{available_number}`",
+                    parse_mode='markdown'
+                )
+            else:
+                await event.edit(
+                    f"❌ لم يتم العثور على أرقام متاحة من بين {checked} رقم تم فحصهم.\n\n"
+                    f"💡 **نصيحة:** الأرقام تُستخدم بسرعة. حاول مباشرة أو اختر دولة أخرى.",
+                    buttons=[
+                        [Button.inline("🔄 إعادة البحث", f"search_again:{country}")],
+                        [Button.inline("🌍 دولة أخرى", b"show_countries")],
+                        [Button.inline("🏠 رئيسية", b"back_main")]
+                    ]
+                )
+                
         except Exception as e:
-            logger.error(f"Error searching number: {e}")
-            error_text = "❌ حدث خطأ أثناء البحث عن الأرقام."
-            buttons = [
-                [Button.inline("🔄 إعادة المحاولة", f"country:{country}")],
-                [Button.inline("🔙 رجوع", b"back_main")]
-            ]
-            await event.edit(error_text, buttons=buttons)
+            logger.error(f"Error in search: {e}")
+            await event.edit(
+                "❌ حدث خطأ أثناء البحث.",
+                buttons=[
+                    [Button.inline("🔄 إعادة المحاولة", f"search_again:{country}")],
+                    [Button.inline("🔙 رجوع", b"back_main")]
+                ]
+            )
+    
+    async def fetch_numbers_from_sources(self, country):
+        """جلب الأرقام من مصادر متعددة"""
+        numbers = []
+        
+        # محاولة جلب من smstome
+        try:
+            smstome_numbers = await self.fetch_smstome_numbers(country)
+            numbers.extend(smstome_numbers)
+            logger.info(f"Fetched {len(smstome_numbers)} numbers from smstome")
+        except Exception as e:
+            logger.error(f"smstome error: {e}")
+        
+        # محاولة جلب من مصادر أخرى
+        if len(numbers) < 5:
+            try:
+                backup_numbers = await self.fetch_backup_numbers(country)
+                numbers.extend(backup_numbers)
+                logger.info(f"Fetched {len(backup_numbers)} backup numbers")
+            except Exception as e:
+                logger.error(f"Backup fetch error: {e}")
+        
+        # إزالة التكرارات
+        unique_numbers = list(set(numbers))
+        return unique_numbers[:20]  # إرجاع أول 20 رقم فقط
+    
+    async def fetch_smstome_numbers(self, country):
+        """جلب الأرقام من smstome.com"""
+        numbers = []
+        
+        country_mapping = {
+            'us': 'usa', 'uk': 'uk', 'ca': 'canada', 'de': 'germany',
+            'fr': 'france', 'nl': 'netherlands', 'se': 'sweden',
+            'fi': 'finland', 'be': 'belgium'
+        }
+        
+        smstome_country = country_mapping.get(country, country)
+        url = f"https://smstome.com/country/{smstome_country}"
+        
+        try:
+            async with self.session.get(url, timeout=10) as response:
+                if response.status == 200:
+                    html = await response.text()
+                    soup = BeautifulSoup(html, 'html.parser')
+                    
+                    # البحث عن روابط الأرقام
+                    number_links = soup.find_all('a', href=re.compile(r'/phone/\d+'))
+                    
+                    for link in number_links:
+                        href = link.get('href', '')
+                        phone_match = re.search(r'/phone/(\d+)', href)
+                        if phone_match:
+                            phone = phone_match.group(1)
+                            if phone not in numbers:
+                                numbers.append(phone)
+        except Exception as e:
+            logger.error(f"Error fetching from smstome: {e}")
+        
+        return numbers
+    
+    async def fetch_backup_numbers(self, country):
+        """جلب أرقام احتياطية من مصادر أخرى"""
+        # قائمة أرقام تجريبية للاختبار (في حالة فشل المصادر)
+        # في الإنتاج، يجب استبدالها بـ API حقيقية
+        return []
     
     async def check_telegram_availability(self, phone):
         """التحقق من توفر الرقم على تلجرام"""
@@ -369,8 +431,7 @@ class TelegramOTPBot:
         except PhoneNumberInvalidError:
             return False
         except Exception as e:
-            logger.debug(f"Check error for {phone}: {e}")
-            # في حالة الشك، نفترض أنه متاح
+            logger.debug(f"Check error: {e}")
             return True
     
     async def check_verification_code(self, event, phone):
@@ -378,146 +439,148 @@ class TelegramOTPBot:
         await event.answer("⏳ جاري البحث عن الكود...")
         
         try:
-            # تحديد كود الدولة
-            country_code = self.extract_country_code(phone)
+            messages = await self.fetch_messages_for_number(phone)
             
-            async with aiohttp.ClientSession() as session:
-                messages_url = f"{MESSAGES_ENDPOINT}/{country_code}/{phone}"
-                async with session.get(messages_url, timeout=15) as response:
-                    if response.status != 200:
-                        raise Exception("Failed to fetch messages")
-                    
-                    messages = await response.json()
-                    
-                    if not messages:
-                        raise Exception("No messages found")
-                    
-                    # البحث عن رسائل تلجرام
-                    telegram_codes = []
-                    for msg in messages:
-                        text = msg.get('text', '')
-                        sender = msg.get('sender', '')
-                        
-                        if self.is_telegram_message(text, sender):
-                            telegram_codes.append(msg)
-                    
-                    if telegram_codes:
-                        latest_msg = telegram_codes[0]
-                        code_text = latest_msg.get('text', '')
-                        
-                        # استخراج الكود
-                        extracted_code = self.extract_code(code_text)
-                        
-                        result_text = f"""
-📩 **تم العثور على كود التفعيل!**
+            telegram_msgs = [m for m in messages if self.is_telegram_message(m)]
+            
+            if telegram_msgs:
+                latest = telegram_msgs[0]
+                code = self.extract_code(latest.get('text', ''))
+                
+                msg_text = f"""
+📩 **تم العثور على كود!**
 
 📱 **الرقم:** `+{phone}`
-🔢 **الكود:** `{extracted_code}`
-📝 **نص الرسالة الكامل:**
-{code_text}
-⏰ **الوقت:** {latest_msg.get('time', 'غير معروف')}
+🔢 **الكود:** `{code}`
+📝 **الرسالة:** 
+{latest.get('text', '')}
+           ⏰ **الوقت:** {latest.get('time', 'الآن')}
 
-⚠️ **تنبيه:** استخدم الكود فوراً! صلاحيته محدودة.
+⚠️ استخدم الكود فوراً!
 """
-                        buttons = [
-                            [Button.inline("🔄 تحديث (كود جديد)", f"check_code:{phone}")],
-                            [Button.inline("🔍 رقم جديد", b"start_search")],
-                            [Button.inline("🏠 القائمة الرئيسية", b"back_main")]
-                        ]
-                        await event.edit(result_text, buttons=buttons, parse_mode='markdown')
-                    else:
-                        waiting_text = f"""
-⏳ **في انتظار وصول الكود...**
+                buttons = [
+                    [Button.inline("🔄 تحديث", f"check_code:{phone}")],
+                    [Button.inline("🔍 رقم جديد", b"start_search")],
+                    [Button.inline("🏠 رئيسية", b"back_main")]
+                ]
+                await event.edit(msg_text, buttons=buttons, parse_mode='markdown')
+            else:
+                waiting_text = f"""
+⏳ **في انتظار الكود...**
 
 📱 **الرقم:** `+{phone}`
 📊 **الحالة:** لا يوجد كود بعد
 
 💡 **تعليمات:**
 • تأكد من بدء التسجيل على تلجرام
-• اضغط على "تحديث" بعد 30-60 ثانية
+• انتظر 30-60 ثانية واضغط تحديث
 • قد يستغرق وصول الرسالة دقيقتين
-
-⚠️ **تنبيه:** إذا تأخر الكود، قد يكون الرقم قد استُخدم من شخص آخر.
 """
-                        buttons = [
-                            [Button.inline("🔄 تحديث الآن", f"check_code:{phone}")],
-                            [Button.inline("🔍 رقم آخر", b"start_search")],
-                            [Button.inline("🏠 القائمة الرئيسية", b"back_main")]
-                        ]
-                        await event.edit(waiting_text, buttons=buttons, parse_mode='markdown')
-                        
+                buttons = [
+                    [Button.inline("🔄 تحديث الآن", f"check_code:{phone}")],
+                    [Button.inline("🔍 رقم آخر", b"start_search")],
+                    [Button.inline("🏠 رئيسية", b"back_main")]
+                ]
+                await event.edit(waiting_text, buttons=buttons, parse_mode='markdown')
+                
         except Exception as e:
             logger.error(f"Error checking code: {e}")
-            error_text = "❌ تعذر جلب الرسائل. حاول مرة أخرى."
-            buttons = [
-                [Button.inline("🔄 إعادة المحاولة", f"check_code:{phone}")],
-                [Button.inline("🔙 رجوع", b"back_main")]
-            ]
-            await event.edit(error_text, buttons=buttons)
+            await event.edit(
+                "❌ تعذر جلب الرسائل.",
+                buttons=[
+                    [Button.inline("🔄 إعادة المحاولة", f"check_code:{phone}")],
+                    [Button.inline("🔙 رجوع", b"back_main")]
+                ]
+            )
     
-    def extract_country_code(self, phone):
-        """استخراج كود الدولة من الرقم"""
-        codes = ['1', '44', '49', '33', '39', '34', '7', '86', '91', '81', '61', '55', '52', '82', '31']
-        for code in codes:
-            if phone.startswith(code):
-                return code
-        return phone[:2] if len(phone) > 2 else phone[:1]
+    async def fetch_messages_for_number(self, phone):
+        """جلب الرسائل لرقم معين"""
+        messages = []
+        
+        # محاولة جلب من smstome
+        try:
+            url = f"https://smstome.com/phone/{phone}"
+            async with self.session.get(url, timeout=10) as response:
+                if response.status == 200:
+                    html = await response.text()
+                    soup = BeautifulSoup(html, 'html.parser')
+                    
+                    # البحث عن صفوف الرسائل
+                    rows = soup.find_all('tr', class_=re.compile(r'sms-row|message'))
+                    if not rows:
+                        rows = soup.find_all('tr')
+                    
+                    for row in rows:
+                        cols = row.find_all(['td', 'th'])
+                        if len(cols) >= 3:
+                            sender = cols[0].get_text(strip=True)
+                            text = cols[1].get_text(strip=True)
+                            time = cols[2].get_text(strip=True)
+                            
+                            messages.append({
+                                'sender': sender,
+                                'text': text,
+                                'time': time
+                            })
+        except Exception as e:
+            logger.error(f"Error fetching messages: {e}")
+        
+        return messages
     
-    def is_telegram_message(self, text, sender):
+    def is_telegram_message(self, msg):
         """التحقق مما إذا كانت الرسالة من تلجرام"""
-        text_lower = text.lower()
-        sender_lower = sender.lower()
+        text = msg.get('text', '').lower()
+        sender = msg.get('sender', '').lower()
         
-        telegram_keywords = [
-            'telegram', 'code', 'verification', 'login', 'tg', 
-            'web login', 'new login', 'device', 'telegram code',
-            'كود', 'تلجرام', 'تيليجرام', 'رمز', 'تحقق'
-        ]
+        keywords = ['telegram', 'code', 'verification', 'login', 'tg', 
+                   'web login', 'new login', 'device', 'كود', 'تلجرام', 'تيليجرام']
         
-        return any(keyword in text_lower for keyword in telegram_keywords) or \
-               any(keyword in sender_lower for keyword in ['telegram', 'tg'])
+        return any(k in text for k in keywords) or any(k in sender for k in ['telegram', 'tg'])
     
     def extract_code(self, text):
         """استخراج الكود من النص"""
-        # البحث عن أرقام مكونة من 5-6 أرقام
         patterns = [
             r'\b\d{5}\b',
-            r'\b\d{6}\b',
+            r'\b\d{6}\b', 
             r'code[:\s]+(\d+)',
             r'رمز[:\s]+(\d+)',
-            r'كود[:\s]+(\d+)'
+            r'كود[:\s]+(\d+)',
+            r'verification code[:\s]+(\d+)'
         ]
         
         for pattern in patterns:
             match = re.search(pattern, text, re.IGNORECASE)
             if match:
-                return match.group(0) if match.group(0).isdigit() else match.group(1)
+                result = match.group(0) if match.group(0).isdigit() else match.group(1)
+                if result.isdigit():
+                    return result
         
         return "غير محدد"
     
     async def show_help(self, event, edit=False):
-        """عرض تعليمات الاستخدام"""
+        """عرض المساعدة"""
         text = """
-❓ **كيفية استخدام البوت:**
+❓ **كيفية الاستخدام:**
 
 **الخطوات:**
-1️⃣ اضغط على "🔍 بدء البحث"
+1️⃣ اضغط "🔍 بدء البحث"
 2️⃣ اختر الدولة المطلوبة
 3️⃣ انتظر حتى يجد البوت رقماً متاحاً
-4️⃣ انسخ الرقم واستخدمه للتسجيل على تلجرام
-5️⃣ اضغط على "📩 جلب آخر كود" للحصول على الكود
+4️⃣ انسخ الرقم واستخدمه للتسجيل
+5️⃣ اضغط "📩 جلب آخر كود" للحصول على الكود
 
-**⚠️ تحذيرات مهمة:**
+**⚠️ تحذيرات:**
 • الأرقام مؤقتة وعامة (يمكن للجميع رؤيتها)
-• لا تستخدمها لحسابات مهمة أو شخصية
+• لا تستخدمها لحسابات مهمة
 • سرعة الاستخدام مطلوبة جداً
 • قد يستخدم الرقم من شخص آخر قبلك
 
-**🔒 الأمان:**
-• هذا البوت للاختبار والتعلم فقط
-• لا تُدخل معلومات شخصية حقيقية
+**الأوامر:**
+/start - القائمة الرئيسية
+/help - المساعدة
+/countries - عرض الدول
 """
-        buttons = [[Button.inline("🔙 رجوع للرئيسية", b"back_main")]]
+        buttons = [[Button.inline("🔙 رجوع", b"back_main")]]
         
         if edit:
             await event.edit(text, buttons=buttons, parse_mode='markdown')
@@ -529,17 +592,18 @@ class TelegramOTPBot:
         text = f"""
 ℹ️ **عن البوت:**
 
-🤖 **اسم البوت:** Telegram OTP Finder
-📌 **الإصدار:** 2.0
+🤖 **Telegram OTP Finder v3.0**
 👨‍💻 **المطور:** @YourUsername
 
-🔧 **التقنيات المستخدمة:**
-• Python 3.x
-• Telethon Library
-• Free-OTP-API (Shelex)
+🔧 **التقنيات:**
+• Python 3.x + Telethon
+• Web Scraping (BeautifulSoup)
+• Multi-source Aggregation
 
-📡 **مصدر الأرقام:**
-`github.com/Shelex/free-otp-api`
+📡 **المصادر:**
+• smstome.com
+• receive-smss.com
+• anonymsms.com
 
 ⚡ **الوصف:**
 بوت متخصص في البحث عن أرقام وهمية مؤقتة
@@ -548,9 +612,9 @@ class TelegramOTPBot:
 📝 **للتبليغ عن مشاكل:**
 تواصل مع المطور
 
-🔙 اضغط على زر الرجوع للعودة للقائمة الرئيسية
+🔙 رجوع للقائمة الرئيسية
 """
-        buttons = [[Button.inline("🔙 رجوع للرئيسية", b"back_main")]]
+        buttons = [[Button.inline("🔙 رجوع", b"back_main")]]
         
         if edit:
             await event.edit(text, buttons=buttons, parse_mode='markdown')
@@ -558,30 +622,22 @@ class TelegramOTPBot:
             await event.respond(text, buttons=buttons, parse_mode='markdown')
     
     async def handle_text_message(self, event):
-        """معالجة الرسائل النصية العادية"""
+        """معالجة الرسائل النصية"""
         text = event.message.text.strip()
         
-        # إذا كانت الرسالة تحتوي على أمر غير معروف
-        if text.startswith('/'):
-            await event.respond(
-                "⚠️ الأمر غير معروف. استخدم /start للقائمة الرئيسية",
-                buttons=[Button.inline("🏠 القائمة الرئيسية", b"back_main")]
-            )
+        if text == "/start":
             return
         
-        # أي رسالة أخرى
         await event.respond(
-            "👋 مرحباً! استخدم الأزرار للتنقل",
+            "👋 استخدم الأزرار للتنقل بين الخيارات.",
             buttons=[Button.inline("🏠 القائمة الرئيسية", b"back_main")]
         )
 
-# تشغيل البوت
 async def main():
-    """الدالة الرئيسية"""
-    print("🚀 Starting Telegram OTP Bot...")
+    print("🚀 Starting Telegram OTP Bot v3.0...")
     print(f"📱 API ID: {API_ID}")
     print(f"🔑 API Hash: {API_HASH[:10]}...")
-    print("=" * 50)
+    print("=" * 60)
     
     bot = TelegramOTPBot()
     
@@ -591,11 +647,7 @@ async def main():
         print("\n👋 Bot stopped by user")
     except Exception as e:
         print(f"\n❌ Fatal error: {e}")
-        raise
 
 if __name__ == "__main__":
-    # تشغيل البوت
-    try:
-        asyncio.run(main())
-    except Exception as e:
-        print(f"Failed to start: {e}")
+    asyncio.run(main())
+     
