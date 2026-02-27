@@ -121,7 +121,14 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     text = "✨ مرحباً بك في بوت الأفلام والمسلسلات العربية ✨\nاختر ما تريد من القائمة أدناه:"
     if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+        query = update.callback_query
+        message = query.message
+        # إذا كانت الرسالة تحتوي على وسائط (صورة، فيديو، ...) لا يمكن تعديل نصها، فنحذفها ونرسل جديدة
+        if message.photo or message.video or message.audio or message.document:
+            await query.delete_message()
+            await context.bot.send_message(chat_id=message.chat_id, text=text, reply_markup=InlineKeyboardMarkup(keyboard))
+        else:
+            await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
     else:
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
