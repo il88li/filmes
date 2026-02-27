@@ -1,54 +1,49 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# main.py - تشغيل البوت
-
-import asyncio
-import logging
-import os
+import asyncio, logging
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ConversationHandler, MessageHandler, filters, ContextTypes
+from telegram.constants import ParseMode
 
 from config import *
 from database import *
 from handlers import BotHandlers
 
-# إعداد التسجيل
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', 
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 class TelegramMovieBot:
     def __init__(self):
-        print("🤖 بدء تشغيل بوت الأفلام...")
+        print("🤖 بوت الأفلام والمسلسلات (النسخة الكاملة)")
         self.app = Application.builder().token(BOT_TOKEN).build()
         self.setup_handlers()
     
     def setup_handlers(self):
-        """إعداد معالجات البوت"""
         handlers = BotHandlers()
         
-        # معالج البداية
         conv_handler = ConversationHandler(
             entry_points=[CommandHandler('start', handlers.start)],
             states={
                 CHECK_SUB: [CallbackQueryHandler(handlers.button_handler)],
+                SEARCH_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.search_handler)],
+                REQUEST_MOVIE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.request_movie_handler)],
+                ADD_MOVIE_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.add_movie_name_handler)],
+                ADD_SERIES_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, handlers.add_series_name_handler)],
+                ADDING_CONTENT: [
+                    MessageHandler(filters.VIDEO, handlers.adding_content_handler),
+                    CommandHandler('done', handlers.adding_content_handler)
+                ],
             },
             fallbacks=[CommandHandler('start', handlers.start)],
         )
         
-        # إضافة المعالجات
         self.app.add_handler(conv_handler)
         self.app.add_handler(CallbackQueryHandler(handlers.button_handler))
         self.app.add_handler(CommandHandler("admin", handlers.button_handler))
-        
-        print("✅ تم إعداد المعالجات")
-    
+        print("✅ كل الوظائف تعمل!")
+
     async def run(self):
-        """تشغيل البوت"""
-        maintenance = get_maintenance_status()
-        print(f"🔧 الصيانة: {'مفعلة' if maintenance else 'معطلة'}")
-        print("🚀 البوت يعمل الآن...")
+        print("🚀 البوت جاهز!")
+        print("📱 /start - البحث - طلب فيلم")
+        print("👨‍💼 /admin - إضافة محتوى")
         await self.app.run_polling(drop_pending_updates=True)
 
 if __name__ == '__main__':
