@@ -1,9 +1,9 @@
-import os
-import time
-from telegram import InputFile 
 import sqlite3
 import threading
+import os
+import time
 from config import DB_NAME, DEFAULT_SERIES_CHANNEL, DEFAULT_MOVIES_CHANNEL, DEFAULT_RECOMMENDATIONS_CHANNEL
+from telegram import InputFile
 
 lock = threading.Lock()
 
@@ -335,16 +335,16 @@ def set_invite_setting(key, value):
 def init_default_channels():
     """تعيين القنوات الافتراضية إذا لم تكن موجودة"""
     if not get_channel('series_channel'):
-        set_channel('series_channel', DEFAULT_SERIES_CHANNEL)
+        set_channel('series_channel', str(DEFAULT_SERIES_CHANNEL))
         print(f"✅ تم تعيين قناة المسلسلات الافتراضية: {DEFAULT_SERIES_CHANNEL}")
     
     if not get_channel('movies_channel'):
-        set_channel('movies_channel', DEFAULT_MOVIES_CHANNEL)
+        set_channel('movies_channel', str(DEFAULT_MOVIES_CHANNEL))
         print(f"✅ تم تعيين قناة الأفلام الافتراضية: {DEFAULT_MOVIES_CHANNEL}")
     
     if not get_channel('recommendations_channel'):
-        set_recommendations_channel(DEFAULT_RECOMMENDATIONS_CHANNEL)
-        print(f"✅ تم تعيين قناة التوصيات الافتراضية: {DEFAULT_RECOMMENDATIONS_CHANNEL}") 
+        set_recommendations_channel(str(DEFAULT_RECOMMENDATIONS_CHANNEL))
+        print(f"✅ تم تعيين قناة التوصيات الافتراضية: {DEFAULT_RECOMMENDATIONS_CHANNEL}")
 
 # ===== دوال النسخ الاحتياطي والاستعادة =====
 def is_db_empty():
@@ -408,4 +408,4 @@ async def restore_from_channel(context):
         return False
     except Exception as e:
         print(f"❌ فشل الاسترجاع: {e}")
-        return False
+        return False 
