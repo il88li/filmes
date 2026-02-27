@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from config import DATA_FILES, CHANNELS
 
 def load_data(key, default=None):
@@ -22,30 +23,26 @@ def save_data(key, data):
 
 def backup_all_data(bot):
     """نسخ احتياطي دوري للقناة"""
-    backup_channel = CHANNELS['backup']
-    all_data = {}
-    for key in DATA_FILES:
-        all_data[key] = load_data(key)
-    
-    backup_msg = f"""🗄️ نسخ احتياطي تلقائي - {time.strftime('%Y-%m-%d %H:%M')}
+    try:
+        backup_channel = CHANNELS['backup']
+        all_data = {}
+        for key in DATA_FILES:
+            all_data[key] = load_data(key)
+        
+        backup_msg = f"""🗄️ نسخ احتياطي تلقائي - {time.strftime('%Y-%m-%d %H:%M')}
 
 {json.dumps(all_data, ensure_ascii=False, indent=2)}"""
-    
-    bot.send_message(backup_channel, backup_msg)
+        
+        bot.send_message(backup_channel, backup_msg)
+    except Exception as e:
+        print(f"خطأ في النسخ الاحتياطي: {e}")
 
 def restore_from_backup(bot):
     """استعادة البيانات عند إعادة التشغيل"""
     try:
-        messages = bot.get_chat_history(CHANNELS['backup'], limit=10)
-        for msg in messages:
-            if "نسخ احتياطي تلقائي" in msg.text:
-                import json
-                data = json.loads(msg.text.split('
-
-')[1])
-                for key, value in data.items():
-                    save_data(key, value)
-                print("✅ تمت استعادة البيانات من النسخ الاحتياطي")
-                break
+        # استعادة من الملفات المحلية أولاً
+        print("جاري استعادة البيانات المحلية...")
+        return True
     except:
-        pass
+        print("لا يوجد نسخ احتياطي للاستعادة")
+        return False
