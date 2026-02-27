@@ -1,13 +1,13 @@
 import telebot
-from telebot.types import CallbackQuery
+from telebot.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from database import load_data, save_data
 from utils import *
 from invite import *
 from admin import *
-from config import ADMIN_ID, CHANNEL_USERNAME, CHANNELS
+from config import ADMIN_ID, CHANNEL_USERNAME
 import re
 
-user_states = {}  # حالة المستخدمين (في الذاكرة)
+user_states = {}
 
 def register_handlers(bot):
     
@@ -34,15 +34,15 @@ def register_handlers(bot):
         save_data('users', users)
         
         if check_subscription(bot, message.from_user.id):
-            handle_after_subscribe(bot, message.chat.id, user_id, username, message)
+            handle_after_subscribe(bot, message.chat.id, user_id, username)
         else:
             kb = InlineKeyboardMarkup()
             kb.add(InlineKeyboardButton("اشتراك في القناة", url="https://t.me/iIl337"))
             kb.add(InlineKeyboardButton("التحقق من الاشتراك", callback_data=f"check_sub:{user_id}"))
             bot.send_message(message.chat.id, "🎭 يرجى الاشتراك في القناة الرسمية أولاً:", reply_markup=kb)
 
-    def handle_after_subscribe(bot, chat_id, user_id, username, message):
-        notify_admin_join(bot, message.from_user.id, username)
+    def handle_after_subscribe(bot, chat_id, user_id, username):
+        notify_admin_join(bot, int(user_id), username)
         if user_id == str(ADMIN_ID):
             bot.send_message(chat_id, "🎯 مرحباً يا مدير!")
             bot.send_message(chat_id, "القائمة الرئيسية:", reply_markup=main_menu(user_id, True))
@@ -63,8 +63,7 @@ def register_handlers(bot):
             kb.add(InlineKeyboardButton("الحصول على رابط الدعوة", callback_data=f"get_ref:{user_id}"))
             bot.send_message(chat_id, f"📢 يرجى دعوة {needed} أشخاص جدد:
 
-`{ref_link}`", 
-                           reply_markup=kb, parse_mode='Markdown')
+{ref_link}", reply_markup=kb)
         else:
             users[user_id]['active'] = True
             save_data('users', users)
@@ -88,7 +87,11 @@ def register_handlers(bot):
             kb = InlineKeyboardMarkup()
             kb.add(InlineKeyboardButton("اشتراك في القناة", url="https://t.me/iIl337"))
             kb.add(InlineKeyboardButton("التحقق", callback_data=f"check_sub:{user_id}"))
-            bot.edit_message_text("يجب الاشتراك في القناة أولاً!", chat_id, msg_id, reply_markup=kb)
+            try:
+                bot.edit_message_text("يجب الاشتراك في القناة أولاً!", chat_id, msg_id, reply_markup=kb)
+            except:
+                pass
+            bot.answer_callback_query(call.id, "اشترك أولاً!")
             return
         
         # التحقق من الدعوات
@@ -113,9 +116,20 @@ def register_handlers(bot):
             else:
                 bot.edit_message_text("لا توجد مسلسلات", chat_id, msg_id, reply_markup=main_menu(user_id))
         
+        elif data == 'menu_movies':
+            movies_data = load_data('movies')
+            if movies_data:
+                bot.edit_message_text("🎥 اختر فيلم:", chat_id, msg_id, 
+                    reply_markup=pagination_keyboard(list(movies_data.keys()), 0, 'movies', user_id))
+            else:
+                bot.edit_message_text("لا توجد أفلام", chat_id, msg_id, reply_markup=main_menu(user_id))
+        
         elif data == 'back_main':
             bot.edit_message_text("القائمة الرئيسية:", chat_id, msg_id, 
                                 reply_markup=main_menu(user_id, user_id == str(ADMIN_ID)))
+        
+        elif data == 'menu_admin' and user_id == str(ADMIN_ID):
+            bot.edit_message_text("لوحة الإدارة:", chat_id, msg_id, reply_markup=admin_menu())
         
         bot.answer_callback_query(call.id)
 
@@ -124,11 +138,30 @@ def register_handlers(bot):
         user_id = str(message.from_user.id)
         text = message.text
         
-        # منطق الإدارة للمدير
-        if user_id == str(ADMIN_ID):
-            bot.reply_to(message, "تم إرسال الرسالة للمدير", reply_markup=main_menu(user_id, True))
-        else:
-            bot.reply_to(message, "استخدم الأزرار!", reply_markup=main_menu(user_id))
+        if user_states.get(user_id) == 'searching':
+            series = load_data('series')
+            movies = load_data('movies')
+            results = []
+            
+            for name in series:
+                if text.lower() in name.lower():
+                    results.append(name)
+            for name in movies:
+                if text.lower() in name.lower():
+                    results.append(name)
+            
+            if results:
+                kb = InlineKeyboardMarkup(row_width=1)
+                for item in results[:10]:
+                    kb.add(InlineKeyboardButton(item, callback_data=f"search:{item}"))
+                kb.add(InlineKeyboardButton("رجوع", callback_data="back_main"))
+                bot.send_message(message.chat.id, "نتائج البحث:", reply_markup=kb)
+            else:
+                bot.send_message(message.chat.id, "لا توجد نتائج")
+            user_states[user_id] = None
+            return
+        
+        bot.reply_to(message, "استخدم الأزرار!", reply_markup=main_menu(user_id, user_id == str(ADMIN_ID)))
 
-# تسجيل الـ handlers
-register_handlers(bot) 
+# في نهاية الملف - تسجيل الـ handlers
+# هذا السطر يتم استدعاؤه في main.py
