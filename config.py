@@ -1,25 +1,24 @@
-BOT_TOKEN = '8338583447:AAEbRQZQM6ILrD_tYdFtCtbr1yGRpyl-N_s'
+# config.py
+import os
+from datetime import datetime
+
+# Bot configuration
+BOT_TOKEN = "8338583447:AAEbRQZQM6ILrD_tYdFtCtbr1yGRpyl-N_s"
 ADMIN_ID = 6689435577
-CHANNEL_USERNAME = '@iIl337'
-BOT_USERNAME = '@FI7O_BOT'
+MOVIES_CHANNEL = "-1003886823374"
+SERIES_CHANNEL = "-1003601037185"
+BACKUP_CHANNEL = "-1003844037351"
+SUPPORT_CHANNEL = "https://t.me/iIl337"
 
-# قنوات البيانات
+# States
+CHECK_SUB, SEARCH_NAME, REQUEST_MOVIE, ADD_MOVIE_NAME, ADD_EPISODE, ADMIN_ADDING = range(6)
+
+# Database file
+DB_FILE = "bot_data.db"
+
+# Channel usernames for links
 CHANNELS = {
-    'movies': -1003886823374,
-    'series': -1003601037185, 
-    'recommendations': -1003091756917,
-    'backup': -1003844037351
-}
-
-DATA_FILES = {
-    'users': 'users.json',
-    'series': 'series.json',
-    'movies': 'movies.json',
-    'recommendations': 'recommendations.json',
-    'invites': 'invites.json',
-    'channels': 'channels.json',
-    'funded_channels': 'funded_channels.json',
-    'banned': 'banned.json',
-    'ratings': 'ratings.json',
-    'states': 'states.json'
+    "movies": MOVIES_CHANNEL,
+    "series": SERIES_CHANNEL,
+    "backup": BACKUP_CHANNEL
 }
