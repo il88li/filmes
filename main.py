@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 # إعدادات البوت
 API_ID = 23656977
 API_HASH = "49d3f43531a92b3f5bc403766313ca1e"
-BOT_TOKEN = "8137587721:AAGq7kyLc3E0EL7HZ2SKRmJPGj3OLQFVSKo"
+BOT_TOKEN = "8137587721:AAEZJt1ipkNPj694WkomhYo7KiP1jGsHNyg"
 
 # مصادر الأرقام المؤقتة (Web Scraping)
 SMS_SOURCES = {
