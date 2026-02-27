@@ -11,6 +11,7 @@ from admin import (ADD_SERIES_NAME, ADD_SERIES_VIDEOS, ADD_MOVIE_NAME, ADD_MOVIE
                    BAN_USER_ID, UNBAN_USER_ID, ADD_REC_TITLE, ADD_REC_PHOTO, ADD_REC_DESC, DEL_REC_TITLE,
                    SET_SERIES_CH, SET_MOVIES_CH, SET_RECOMMENDATIONS_CH, FUNDING_CH, FUNDING_COUNT, SET_INVITE_COUNT)
 import logging
+import asyncio
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,12 +24,28 @@ async def error_handler(update: Update, context):
             text=f"❌ حدث خطأ: {context.error}\n\nتحديث: {update}"
         )
 
+async def backup_job(context):
+    """مهمة دورية لعمل نسخة احتياطية"""
+    await db.backup_to_channel(context)
+
 def main():
     db.init_db()
     db.init_default_channels()  # تعيين القنوات الافتراضية
 
     app = Application.builder().token(config.TOKEN).build()
     app.add_error_handler(error_handler)
+
+    # استرجاع قاعدة البيانات إذا كانت فارغة
+    async def restore_if_empty():
+        if db.is_db_empty():
+            print("🔄 قاعدة البيانات فارغة، جاري محاولة الاسترجاع...")
+            await db.restore_from_channel(app.bot)
+        else:
+            print("✅ قاعدة البيانات موجودة ومليئة.")
+
+    # تنفيذ الاسترجاع قبل بدء البوت
+    loop = asyncio.get_event_loop()
+    loop.create_task(restore_if_empty())
 
     # ===== معالجات المستخدمين =====
     app.add_handler(CommandHandler("start", handlers.start))
@@ -80,7 +97,6 @@ def main():
     app.add_handler(CallbackQueryHandler(admin.admin_back, pattern="^admin_back$"))
 
     app.add_handler(CallbackQueryHandler(admin.toggle_invite, pattern="^admin_toggle_invite$"))
-    # ملاحظة: تم حذف CallbackQueryHandler للوظائف التي لديها ConversationHandler لتفادي التكرار
 
     # ===== محادثات الإدارة =====
     add_series_conv = ConversationHandler(
@@ -235,6 +251,10 @@ def main():
         fallbacks=[CommandHandler("cancel", admin.cancel)]
     )
     app.add_handler(del_rec_conv)
+
+    # جدولة النسخ الاحتياطي كل ساعتين
+    job_queue = app.job_queue
+    job_queue.run_repeating(backup_job, interval=7200, first=10)  # 7200 ثانية = ساعتين
 
     print("✅ البوت يعمل...")
     app.run_polling()
