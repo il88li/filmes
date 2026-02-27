@@ -4,6 +4,7 @@ import config
 import database as db
 import utils
 from utils import ensure_subscribed
+import html  # لإصلاح مشكلة Markdown
 
 # ================== البداية والاشتراك ==================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -449,17 +450,24 @@ async def search_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip().lower()
+    print(f"🔍 بحث عن: '{text}'")  # للتشخيص
 
     series_list = db.get_all_series() or []
     movie_list = db.get_all_movies() or []
+
+    # طباعة قائمة المسلسلات والأفلام للتأكد (يمكن إزالتها لاحقاً)
+    print("المسلسلات:", [name for _, name in series_list])
+    print("الأفلام:", [name for _, name in movie_list])
 
     results = []
     for sid, name in series_list:
         if text in name.lower():
             results.append(('series', sid, name))
+            print(f"✅ مسلسل مطابق: {name}")
     for mid, name in movie_list:
         if text in name.lower():
             results.append(('movie', mid, name))
+            print(f"✅ فيلم مطابق: {name}")
 
     if not results:
         await update.message.reply_text("📭 لا توجد نتائج.", reply_markup=InlineKeyboardMarkup([utils.back_button("back_main")]))
@@ -495,6 +503,10 @@ async def show_recommendation(update: Update, context: ContextTypes.DEFAULT_TYPE
     index = context.user_data['rec_index']
     title, content_type, content_id, photo, desc = recs[index]
 
+    # هروب النص لمنع أخطاء HTML
+    safe_title = html.escape(title)
+    safe_desc = html.escape(desc)
+
     keyboard = []
     nav = []
     if index > 0:
@@ -510,14 +522,14 @@ async def show_recommendation(update: Update, context: ContextTypes.DEFAULT_TYPE
         await context.bot.send_photo(
             chat_id=query.message.chat_id,
             photo=photo,
-            caption=f"*{title}*\n\n{desc}",
-            parse_mode='Markdown',
+            caption=f"<b>{safe_title}</b>\n\n{safe_desc}",
+            parse_mode='HTML',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
     else:
         await query.edit_message_text(
-            f"*{title}*\n\n{desc}",
-            parse_mode='Markdown',
+            f"<b>{safe_title}</b>\n\n{safe_desc}",
+            parse_mode='HTML',
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
