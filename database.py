@@ -1,109 +1,97 @@
-# database.py
-import sqlite3
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+import sqlite3, os, uuid
 from datetime import datetime
 from config import DB_FILE
 
 def init_db():
-    """إنشاء قاعدة البيانات و الجداول"""
-    conn = sqlite3.connect(DB_FILE)
+    """قاعدة بيانات نظيفة بدون بيانات تجريبية"""
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
     c = conn.cursor()
     
-    # Users table
+    # المستخدمين
     c.execute('''CREATE TABLE IF NOT EXISTS users 
                  (user_id INTEGER PRIMARY KEY, username TEXT, first_name TEXT, 
-                  joined_date TEXT, invite_count INTEGER DEFAULT 0, banned INTEGER DEFAULT 0)''')
+                  joined_date TEXT, banned INTEGER DEFAULT 0)''')
     
-    # Content table
+    # المحتوى (جدول فارغ)
     c.execute('''CREATE TABLE IF NOT EXISTS content 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT, name TEXT, 
-                  parts TEXT, channel_id TEXT, unique_id TEXT, added_by INTEGER, 
-                  added_date TEXT)''')
+                  parts INTEGER, total_parts INTEGER, channel_message_ids TEXT, 
+                  unique_id TEXT, added_by INTEGER, added_date TEXT)''')
     
-    # Stats table
-    c.execute('''CREATE TABLE IF NOT EXISTS stats 
-                 (uploader_id INTEGER, uploads INTEGER DEFAULT 0, PRIMARY KEY(uploader_id))''')
+    # الطلبات
+    c.execute('''CREATE TABLE IF NOT EXISTS requests 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, 
+                  user_name TEXT, movie_name TEXT, request_date TEXT)''')
     
-    # Settings table
+    # الإعدادات
     c.execute('''CREATE TABLE IF NOT EXISTS settings 
                  (key TEXT PRIMARY KEY, value TEXT)''')
-    c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('maintenance', '0')")
+    c.execute("INSERT OR IGNORE INTO settings (key,value) VALUES('maintenance','0')")
     
     conn.commit()
     conn.close()
+    print("✅ قاعدة بيانات نظيفة جاهزة")
+
+def search_content(query):
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    c = conn.cursor()
+    c.execute("SELECT * FROM content WHERE name LIKE ? LIMIT 10", (f'%{query}%',))
+    results = c.fetchall()
+    conn.close()
+    return results
+
+def add_request(user_id, user_name, movie_name):
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    c = conn.cursor()
+    c.execute("INSERT INTO requests (user_id, user_name, movie_name, request_date) VALUES(?,?,?,?)",
+             (user_id, user_name, movie_name, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+
+def add_content(type_, name, parts, total_parts, channel_message_ids, added_by):
+    """إضافة محتوى جديد"""
+    unique_id = str(uuid.uuid4())[:8]
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    c = conn.cursor()
+    c.execute("""INSERT INTO content (type, name, parts, total_parts, channel_message_ids, 
+                 unique_id, added_by, added_date) VALUES(?,?,?,?,?,?,?,?)""",
+             (type_, name, parts, total_parts, channel_message_ids, unique_id, added_by, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
+    return unique_id
 
 def get_maintenance_status():
-    """جلب حالة الصيانة"""
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
     c = conn.cursor()
     c.execute("SELECT value FROM settings WHERE key='maintenance'")
     result = c.fetchone()
     conn.close()
-    return result[0] == '1' if result else False
+    return result and result[0] == '1'
 
 def set_maintenance_status(status):
-    """تغيير حالة الصيانة"""
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
     c = conn.cursor()
-    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('maintenance', ?)", (str(int(status)),))
+    c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES('maintenance', ?)", (str(int(status)),))
     conn.commit()
     conn.close()
-    return status
+
+def register_user(user_id, username=None, first_name=None):
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
+    c = conn.cursor()
+    c.execute("INSERT OR IGNORE INTO users (user_id, username, first_name, joined_date) VALUES(?,?,?,?)",
+             (user_id, username, first_name, datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
 
 def is_user_banned(user_id):
-    """التحقق من حظر المستخدم"""
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(DB_FILE, check_same_thread=False)
     c = conn.cursor()
     c.execute("SELECT banned FROM users WHERE user_id=?", (user_id,))
     result = c.fetchone()
     conn.close()
     return result and result[0] == 1
 
-def register_user(user_id, username, first_name):
-    """تسجيل مستخدم جديد"""
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("INSERT OR IGNORE INTO users (user_id, username, first_name, joined_date) VALUES (?, ?, ?, ?)",
-             (user_id, username, first_name, datetime.now().isoformat()))
-    conn.commit()
-    conn.close()
-
-def ban_user(user_id):
-    """حظر مستخدم"""
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("UPDATE users SET banned=1 WHERE user_id=?", (user_id,))
-    conn.commit()
-    conn.close()
-
-def unban_user(user_id):
-    """رفع حظر عن مستخدم"""
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("UPDATE users SET banned=0 WHERE user_id=?", (user_id,))
-    conn.commit()
-    conn.close()
-
-def get_stats():
-    """جلب الإحصائيات"""
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM users WHERE banned=0")
-    users = c.fetchone()[0]
-    c.execute("SELECT COUNT(*) FROM content")
-    videos = c.fetchone()[0]
-    c.execute('''SELECT u.first_name, s.uploads FROM stats s 
-                 JOIN users u ON s.uploader_id = u.user_id 
-                 ORDER BY s.uploads DESC LIMIT 1''')
-    top_uploader = c.fetchone()
-    top_name = top_uploader[0] if top_uploader else "لا يوجد"
-    top_uploads = top_uploader[1] if top_uploader else 0
-    conn.close()
-    
-    return f"""📊 **إحصائيات البوت**
-
-👥 عدد المستخدمين: {users}
-🎥 عدد الفيديوهات: {videos}
-🏆 الأكثر مساهمة: {top_name} ({top_uploads} فيديو)"""
-
-# Initialize database
-init_db() 
+init_db()
+print("📭 قاعدة البيانات فارغة - جاهزة لإضافة المحتوى الحقيقي!")
