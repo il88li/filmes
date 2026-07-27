@@ -1,0 +1,139 @@
+<!-- ================================================================
+     لوحة تحكم المشرف (النافذة المنبثقة)
+     ================================================================ -->
+<div class="admin-overlay" id="adminOverlay">
+    <div class="admin-panel">
+        <h2>
+            ⚙️ لوحة تحكم المشرف
+            <small>تعديل جميع البيانات فوراً</small>
+            <button class="admin-close" id="closeAdminBtn">&times;</button>
+        </h2>
+
+        <!-- البيانات الأساسية -->
+        <div class="admin-section">
+            <h3>📝 المعلومات الرئيسية</h3>
+            <div class="admin-group">
+                <label>اسم الموقع</label>
+                <input type="text" id="inputSiteName" value="{{ data.siteName }}">
+            </div>
+            <div class="admin-row">
+                <div class="admin-group">
+                    <label>عنوان الترحيب (الرئيسي)</label>
+                    <input type="text" id="inputHeroTitle" value="{{ data.heroTitle }}">
+                </div>
+                <div class="admin-group">
+                    <label>النص المميز (الملون)</label>
+                    <input type="text" id="inputHeroHighlight" value="{{ data.heroHighlight }}">
+                </div>
+            </div>
+            <div class="admin-group">
+                <label>النص الفرعي</label>
+                <input type="text" id="inputHeroSubtitle" value="{{ data.heroSubtitle }}">
+            </div>
+            <div class="admin-group">
+                <label>النبذة الشخصية</label>
+                <textarea id="inputBioText" rows="3">{{ data.bioText }}</textarea>
+            </div>
+            <div class="admin-group">
+                <label>نص زر الحث على الإجراء (CTA)</label>
+                <input type="text" id="inputCtaText" value="{{ data.ctaText }}">
+            </div>
+            <div class="admin-group">
+                <label>رابط زر CTA</label>
+                <input type="text" id="inputCtaLink" value="{{ data.ctaLink }}">
+            </div>
+            <div class="admin-group">
+                <label>نص التذييل</label>
+                <input type="text" id="inputFooter" value="{{ data.footerText }}">
+            </div>
+        </div>
+
+        <!-- الألوان -->
+        <div class="admin-section">
+            <h3>🎨 تخصيص الألوان</h3>
+            <div class="admin-row">
+                <div class="admin-group">
+                    <label>اللون الرئيسي</label>
+                    <input type="color" id="inputPrimaryColor" value="{{ data.primaryColor }}">
+                </div>
+                <div class="admin-group">
+                    <label>اللون الثانوي</label>
+                    <input type="color" id="inputSecondaryColor" value="{{ data.secondaryColor }}">
+                </div>
+            </div>
+        </div>
+
+        <!-- الخدمات (قائمة ديناميكية) -->
+        <div class="admin-section">
+            <h3>🛠️ الخدمات</h3>
+            <div id="servicesAdminList">
+                {% for service in data.services %}
+                <div class="list-item" data-index="{{ loop.index0 }}">
+                    <span><strong>{{ service.name }}</strong>: {{ service.desc }}</span>
+                    <div class="item-actions">
+                        <button class="delete-service" data-index="{{ loop.index0 }}">✖ حذف</button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+                <input type="text" id="newServiceName" placeholder="اسم الخدمة" style="flex:1; padding:0.5rem; border:2px solid #e2e8f0; border-radius:8px;">
+                <input type="text" id="newServiceDesc" placeholder="وصف الخدمة" style="flex:1; padding:0.5rem; border:2px solid #e2e8f0; border-radius:8px;">
+                <button class="btn-admin success" id="addServiceBtn">+ إضافة</button>
+            </div>
+        </div>
+
+        <!-- المشاريع (قائمة ديناميكية) -->
+        <div class="admin-section">
+            <h3>📂 المشاريع</h3>
+            <div id="projectsAdminList">
+                {% for project in data.projects %}
+                <div class="list-item" data-index="{{ loop.index0 }}">
+                    <span><strong>{{ project.name }}</strong>: {{ project.desc }}</span>
+                    <div class="item-actions">
+                        <button class="delete-project" data-index="{{ loop.index0 }}">✖ حذف</button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <div style="display:flex; gap:0.5rem; margin-top:0.5rem; flex-wrap:wrap;">
+                <input type="text" id="newProjectName" placeholder="اسم المشروع" style="flex:1; min-width:120px; padding:0.5rem; border:2px solid #e2e8f0; border-radius:8px;">
+                <input type="text" id="newProjectDesc" placeholder="وصف المشروع" style="flex:1; min-width:120px; padding:0.5rem; border:2px solid #e2e8f0; border-radius:8px;">
+                <input type="text" id="newProjectImg" placeholder="رابط الصورة (اختياري)" style="flex:1; min-width:120px; padding:0.5rem; border:2px solid #e2e8f0; border-radius:8px;">
+                <button class="btn-admin success" id="addProjectBtn">+ إضافة</button>
+            </div>
+        </div>
+
+        <!-- وسائل التواصل -->
+        <div class="admin-section">
+            <h3>🌐 روابط التواصل</h3>
+            <div id="socialAdminList">
+                {% for item in data.social %}
+                <div class="list-item" data-index="{{ loop.index0 }}">
+                    <span><strong>{{ item.name }}</strong>: {{ item.url }}</span>
+                    <div class="item-actions">
+                        <button class="delete-social" data-index="{{ loop.index0 }}">✖ حذف</button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <div style="display:flex; gap:0.5rem; margin-top:0.5rem; flex-wrap:wrap;">
+                <input type="text" id="newSocialName" placeholder="المنصة (مثل: فيسبوك)" style="flex:1; min-width:100px; padding:0.5rem; border:2px solid #e2e8f0; border-radius:8px;">
+                <input type="text" id="newSocialUrl" placeholder="الرابط" style="flex:1; min-width:150px; padding:0.5rem; border:2px solid #e2e8f0; border-radius:8px;">
+                <button class="btn-admin success" id="addSocialBtn">+ إضافة</button>
+            </div>
+        </div>
+
+        <!-- أزرار الإجراءات النهائية -->
+        <div class="admin-actions">
+            <button class="btn-admin save" id="saveAllBtn">💾 حفظ جميع التغييرات</button>
+            <button class="btn-admin outline" id="exportDataBtn">📤 تصدير البيانات (JSON)</button>
+            <button class="btn-admin outline" id="importDataBtn">📥 استيراد بيانات (JSON)</button>
+            <input type="file" id="importFileInput" accept=".json" style="display:none;">
+            <button class="btn-admin danger" id="resetDataBtn">🔄 إعادة ضبط البيانات الافتراضية</button>
+        </div>
+        <p style="margin-top:0.5rem; font-size:0.8rem; color:#94a3b8;">
+            💡 ملاحظة: جميع التغييرات تُحفظ على الخادم. استخدم التصدير لعمل نسخة احتياطية.
+        </p>
+    </div>
+</div>
