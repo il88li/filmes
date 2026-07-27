@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ data.siteName }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<div class="container" id="appContainer">
+
+    <!-- ====== الهيدر ====== -->
+    <header class="header">
+        <div class="logo-area">
+            <div class="logo-icon" id="logoIcon">م</div>
+            <div class="site-name" id="siteNameDisplay">{{ data.siteName }}</div>
+        </div>
+        <button class="admin-toggle" id="openAdminBtn">
+            ⚙️ لوحة التحكم
+        </button>
+    </header>
+
+    <!-- ====== المحتوى المتغير ====== -->
+    {% block content %}{% endblock %}
+
+    <!-- ====== وسائل التواصل ====== -->
+    <div class="social-links" id="socialContainer">
+        {% for item in data.social %}
+        <a href="{{ item.url }}" target="_blank">{{ item.name }}</a>
+        {% endfor %}
+    </div>
+
+    <!-- ====== التذييل ====== -->
+    <footer class="footer" id="footerText">
+        {{ data.footerText }}
+    </footer>
+</div>
+
+<!-- ====== تضمين لوحة التحكم (تُحمّل ديناميكياً) ====== -->
+{% include 'admin_panel.html' %}
+
+<!-- ====== ملف JavaScript الرئيسي ====== -->
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+
+</body>
+</html>
