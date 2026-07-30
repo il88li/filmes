@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>YM Studio | يوسف - مصمم جرافيك ومونتير فيديو</title>
+    <meta name="description" content="YM Studio - يوسف مصمم جرافيك ومونتير فيديو محترف." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <!-- استدعاء ملف CSS الخارجي -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+
+    <!-- ============================================================
+    HERO SECTION
+    ============================================================ -->
+    <section class="hero" id="home">
+        <img
+        class="hero-bg"
+        src="https://files.catbox.moe/mszmnu.jpg"
+        alt="YM Studio hero background"
+        loading="eager"
+        />
+        <div class="hero-card">
+            <div class="hero-card-inner">
+                <div class="hero-text">
+                    <h1>
+                        مرحبًا، أنا <span class="highlight">يوسف</span><br />
+                        مصمم جرافيك ومونتير فيديو.
+                    </h1>
+                    <p class="subtitle">
+                        أساعد الأفراد والشركات وصناع المحتوى في تحويل أفكارهم إلى تصاميم احترافية
+                        وفيديوهات جذابة تعكس هوية علاماتهم التجارية وتحقق أفضل انطباع لدى الجمهور.
+                    </p>
+                </div>
+                <div class="hero-buttons">
+                    <a href="#portfolio" class="btn btn-primary">
+                        <i class="fas fa-th-large"></i> عرض الأعمال
+                    </a>
+                    <a href="#contact" class="btn btn-secondary">
+                        <i class="fas fa-envelope"></i> تواصل معي
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================================
+    ABOUT
+    ============================================================ -->
+    <section class="section" id="about">
+        <h2 class="section-title">من <span class="highlight">أنا</span></h2>
+        <div class="about-grid">
+            <div class="about-text">
+                <p>
+                    <strong>أنا يوسف</strong>، مصمم جرافيك ومونتير فيديو، متخصص في تصميم الهويات البصرية،
+                    تصاميم السوشيال ميديا، والمونتاج الاحترافي. أحرص على تقديم أعمال تجمع بين
+                    الإبداع، الجودة، والاهتمام بأدق التفاصيل، مع التركيز على تقديم نتائج تليق بكل عميل.
+                </p>
+                <div class="about-stats-mini">
+                    <div class="stat-mini">
+                        <div class="number">100+</div>
+                        <div class="label">مشروع منجز</div>
+                    </div>
+                    <div class="stat-mini">
+                        <div class="number">10+</div>
+                        <div class="label">عميل</div>
+                    </div>
+                </div>
+            </div>
+            <div class="about-image-placeholder">
+                <i class="fas fa-user-astronaut"></i>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================================
+    SERVICES
+    ============================================================ -->
+    <section class="section" id="services">
+        <h2 class="section-title">خدمات<span class="highlight">ي</span></h2>
+        <p class="section-sub">أقدم حلولاً متكاملة في التصميم والمونتاج تناسب احتياجاتك</p>
+        <div class="services-grid">
+            <div class="service-card">
+                <div class="icon"><i class="fas fa-pen-fancy"></i></div>
+                <h3>تصميم الجرافيك</h3>
+                <ul>
+                    <li>تصميم بوستات السوشيال ميديا</li>
+                    <li>تصميم الشعارات (Logo Design)</li>
+                    <li>تصميم الهوية البصرية (Brand Identity)</li>
+                    <li>تصميم البنرات والإعلانات</li>
+                    <li>تصميم الأغلفة والمطبوعات</li>
+                    <li>تصميم الصور المصغرة (YouTube Thumbnails)</li>
+                </ul>
+            </div>
+            <div class="service-card">
+                <div class="icon"><i class="fas fa-film"></i></div>
+                <h3>المونتاج</h3>
+                <ul>
+                    <li>مونتاج الفيديوهات الاحترافية</li>
+                    <li>مونتاج ريلز وإنستجرام وتيك توك ويوتيوب شورتس</li>
+                    <li>تعديل الألوان (Color Correction)</li>
+                    <li>إضافة المؤثرات البصرية والانتقالات</li>
+                    <li>تحسين الصوت وإزالة الضوضاء</li>
+                    <li>إخراج الفيديو بأعلى جودة</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================================
+    TOOLS
+    ============================================================ -->
+    <section class="section" id="tools">
+        <h2 class="section-title">البرامج التي <span class="highlight">أعمل بها</span></h2>
+        <div class="tools-grid">
+            <div class="tool-item">
+                <span class="icon"><i class="fab fa-adobe"></i></span>
+                <div class="name">Adobe Photoshop</div>
+                <div class="desc">تصميم وتعديل الصور · ريتاتش · تصاميم السوشيال ميديا</div>
+            </div>
+            <div class="tool-item">
+                <span class="icon"><i class="fas fa-vector-square"></i></span>
+                <div class="name">Adobe Illustrator</div>
+                <div class="desc">تصميم الشعارات · الهوية البصرية · رسومات Vector</div>
+            </div>
+            <div class="tool-item">
+                <span class="icon"><i class="fas fa-video"></i></span>
+                <div class="name">Adobe Premiere Pro</div>
+                <div class="desc">مونتاج الفيديوهات · تعديل الصوت · محتوى قصير وطويل</div>
+            </div>
+            <div class="tool-item">
+                <span class="icon"><i class="fas fa-magic"></i></span>
+                <div class="name">Adobe After Effects</div>
+                <div class="desc">موشن جرافيك · مؤثرات بصرية · أنيميشن احترافي</div>
+            </div>
+            <div class="tool-item">
+                <span class="icon"><i class="fas fa-palette"></i></span>
+                <div class="name">DaVinci Resolve</div>
+                <div class="desc">Color Grading · مونتاج احترافي · معالجة الفيديو</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================================
+    PORTFOLIO (Dynamic)
+    ============================================================ -->
+    <section class="section" id="portfolio">
+        <h2 class="section-title">معرض <span class="highlight">الأعمال</span></h2>
+        <p class="section-sub">استعرض مشاريعي السابقة في مختلف المجالات</p>
+
+        <div class="portfolio-filters">
+            <button class="filter-btn active" data-filter="all">الكل</button>
+            <button class="filter-btn" data-filter="social">تصاميم السوشيال ميديا</button>
+            <button class="filter-btn" data-filter="logo">الشعارات</button>
+            <button class="filter-btn" data-filter="brand">الهوية البصرية</button>
+            <button class="filter-btn" data-filter="banner">البنرات</button>
+            <button class="filter-btn" data-filter="thumbnail">الصور المصغرة</button>
+            <button class="filter-btn" data-filter="editing">المونتاج</button>
+            <button class="filter-btn" data-filter="reels">الريلز والشورتس</button>
+            <button class="filter-btn" data-filter="ads">فيديوهات إعلانية</button>
+        </div>
+
+        <div class="portfolio-grid" id="portfolioGrid">
+            <!-- يتم جلب البيانات وعرضها عبر JavaScript -->
+            <p style="text-align:center; grid-column:1/-1; color:var(--color-text-muted);">
+                <i class="fas fa-spinner fa-spin"></i> جاري التحميل...
+            </p>
+        </div>
+    </section>
+
+    <!-- ============================================================
+    TESTIMONIALS
+    ============================================================ -->
+    <section class="section" id="testimonials">
+        <h2 class="section-title">آراء <span class="highlight">العملاء</span></h2>
+        <div class="testimonials-slider">
+            <div class="testimonial-track" id="testimonialTrack">
+                <div class="testimonial">
+                    <p class="quote">"عمل احترافي ودقة في التفاصيل، أنصح بالتعامل مع يوسف بشدة."</p>
+                    <div class="author">— أحمد محمد</div>
+                    <div class="role">مؤسس شركة تسويق</div>
+                </div>
+                <div class="testimonial">
+                    <p class="quote">"أبدع في تصميم هويتنا البصرية، كانت تجربة ممتازة من البداية للنهاية."</p>
+                    <div class="author">— سارة خالد</div>
+                    <div class="role">صاحبة علامة تجارية</div>
+                </div>
+                <div class="testimonial">
+                    <p class="quote">"مونتاج فيديو احترافي وسريع، جودة تفوق التوقعات."</p>
+                    <div class="author">— ماجد العتيبي</div>
+                    <div class="role">صانع محتوى</div>
+                </div>
+            </div>
+            <div class="slider-controls">
+                <button class="slider-btn" id="prevTestimonial"><i class="fas fa-chevron-right"></i></button>
+                <button class="slider-btn" id="nextTestimonial"><i class="fas fa-chevron-left"></i></button>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================================
+    STATS
+    ============================================================ -->
+    <section class="section" id="stats">
+        <h2 class="section-title">الإحصائيات</h2>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="number" data-count="100">0</div>
+                <div class="label">المشاريع المنجزة</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" data-count="10">0</div>
+                <div class="label">العملاء</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" data-count="2">0</div>
+                <div class="label">سنوات الخبرة</div>
+            </div>
+            <div class="stat-card">
+                <div class="number" data-count="60">0</div>
+                <div class="label">نسبة رضا العملاء %</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================================================
+    CONTACT
+    ============================================================ -->
+    <section class="section" id="contact">
+        <h2 class="section-title">تواصل <span class="highlight">معي</span></h2>
+        <p class="section-sub">أنا هنا لمساعدتك، تواصل معي عبر منصات التواصل الاجتماعي</p>
+        <div class="social-grid">
+            <a href="#" class="social-link" target="_blank"><i class="fab fa-facebook-f"></i> Facebook</a>
+            <a href="#" class="social-link" target="_blank"><i class="fab fa-instagram"></i> Instagram</a>
+            <a href="#" class="social-link" target="_blank"><i class="fab fa-tiktok"></i> TikTok</a>
+            <a href="#" class="social-link" target="_blank"><i class="fab fa-whatsapp"></i> WhatsApp</a>
+        </div>
+    </section>
+
+    <!-- ============================================================
+    FOOTER
+    ============================================================ -->
+    <footer class="footer">
+        <div class="footer-inner">
+            <div class="footer-col">
+                <h4>YM Studio</h4>
+                <p>نقدم خدمات التصميم الجرافيكي والمونتاج الاحترافي بجودة عالية وإبداع لا محدود.</p>
+            </div>
+            <div class="footer-col">
+                <h4>روابط سريعة</h4>
+                <a href="#home">الرئيسية</a>
+                <a href="#about">من أنا</a>
+                <a href="#services">الخدمات</a>
+                <a href="#portfolio">معرض الأعمال</a>
+                <a href="#contact">التواصل</a>
+            </div>
+            <div class="footer-col">
+                <h4>تابعني</h4>
+                <a href="#" target="_blank"><i class="fab fa-facebook-f"></i> Facebook</a>
+                <a href="#" target="_blank"><i class="fab fa-instagram"></i> Instagram</a>
+                <a href="#" target="_blank"><i class="fab fa-tiktok"></i> TikTok</a>
+                <a href="#" target="_blank"><i class="fab fa-whatsapp"></i> WhatsApp</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            جميع الحقوق محفوظة &copy; <span>YM Studio</span> 2026
+        </div>
+    </footer>
+
+    <!-- استدعاء ملف JavaScript الخارجي -->
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
