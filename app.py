@@ -1,128 +1,139 @@
-# ================================================================
-# app.py - خادم Flask لإدارة الموقع بالكامل
-# ================================================================
-
 import os
-import json
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, jsonify, request
+from flask_sqlalchemy import SQLAlchemy
+from flask_admin import Admin
+from flask_admin.contrib.sqla import ModelView
+from flask_admin.form import ImageUploadField
+from werkzeug.utils import secure_filename
+import uuid
 
+# ============================================================
+# تهيئة التطبيق وقاعدة البيانات
+# ============================================================
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'your-secret-key-here-change-in-production'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///projects.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# ================================================================
-# 1. إعدادات البيانات ومسار الملف
-# ================================================================
-DATA_FILE = os.path.join(os.path.dirname(__file__), 'data', 'site_data.json')
+# مجلد رفع الصور
+UPLOAD_FOLDER = os.path.join('static', 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# البيانات الافتراضية عند أول تشغيل
-DEFAULT_DATA = {
-    "siteName": "موقعي الإبداعي",
-    "heroTitle": "مرحباً، أنا",
-    "heroHighlight": "المطور",
-    "heroSubtitle": "أبني تجارب رقمية استثنائية تجمع بين الجمال والأداء.",
-    "bioText": "مطور واجهات مستخدم بخبرة 5 سنوات، شغوف بتصميم الأنظمة التفاعلية وحل المشكلات التقنية المعقدة.",
-    "ctaText": "تواصل معي",
-    "ctaLink": "#",
-    "footerText": "© 2026 جميع الحقوق محفوظة.",
-    "primaryColor": "#2563eb",
-    "secondaryColor": "#f59e0b",
-    "services": [
-        {"name": "تصميم واجهات UX/UI", "desc": "تصميم تجارب مستخدم سلسة وجذابة بناءً على أحدث المعايير."},
-        {"name": "تطوير الواجهات الأمامية", "desc": "تحويل التصاميم إلى كود نظيف باستخدام React و CSS الحديث."},
-        {"name": "تحسين الأداء و SEO", "desc": "رفع سرعة الموقع وتحسين ظهوره في محركات البحث."}
-    ],
-    "projects": [
-        {"name": "منصة التعلم الذكي", "desc": "منصة تفاعلية للتعليم عن بعد تضم مئات الدروس.", "img": ""},
-        {"name": "تطبيق إدارة المهام", "desc": "تطبيق ويب متكامل لإدارة المشاريع والفرق.", "img": ""},
-        {"name": "موقع المتجر الإلكتروني", "desc": "متجر متكامل مع نظام دفع وإدارة مخزون.", "img": ""}
-    ],
-    "social": [
-        {"name": "تويتر", "url": "https://twitter.com"},
-        {"name": "لينكدإن", "url": "https://linkedin.com"},
-        {"name": "جيثب", "url": "https://github.com"}
-    ]
-}
+db = SQLAlchemy(app)
 
+# ============================================================
+# نموذج قاعدة البيانات (جدول المشاريع)
+# ============================================================
+class Project(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    category = db.Column(db.String(50), nullable=False)
+    image_url = db.Column(db.String(500), nullable=True)  # رابط خارجي
+    image_file = db.Column(db.String(200), nullable=True) # ملف مرفوع محلياً
+    video_url = db.Column(db.String(500), nullable=True) # رابط فيديو (يوتيوب/فيميو)
+    is_active = db.Column(db.Boolean, default=True)
+    sort_order = db.Column(db.Integer, default=0)
 
-def load_data():
-    """تحميل البيانات من ملف JSON، وإنشاء الملف بالبيانات الافتراضية إذا لم يكن موجوداً."""
-    if not os.path.exists(DATA_FILE):
-        # إنشاء مجلد data إذا لم يكن موجوداً
-        os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-        save_data(DEFAULT_DATA)
-        return DEFAULT_DATA.copy()
-    try:
-        with open(DATA_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except (json.JSONDecodeError, FileNotFoundError):
-        # في حال تلف الملف، نستعيد البيانات الافتراضية
-        save_data(DEFAULT_DATA)
-        return DEFAULT_DATA.copy()
+    def __repr__(self):
+        return f'<Project {self.title}>'
 
+# إنشاء الجداول (تشغيل مرة واحدة)
+with app.app_context():
+    db.create_all()
 
-def save_data(data):
-    """حفظ البيانات إلى ملف JSON."""
-    with open(DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+# ============================================================
+# تكوين Flask-Admin (لوحة التحكم)
+# ============================================================
+class ProjectAdmin(ModelView):
+    # الأعمدة المعروضة في القائمة
+    column_list = ['id', 'title', 'category', 'image_file', 'image_url', 'is_active', 'sort_order']
+    column_labels = {
+        'title': 'العنوان',
+        'category': 'الفئة',
+        'image_url': 'رابط الصورة (خارجي)',
+        'image_file': 'رفع صورة (محلي)',
+        'video_url': 'رابط الفيديو',
+        'is_active': 'مفعل',
+        'sort_order': 'ترتيب العرض'
+    }
+    column_choices = {
+        'category': [
+            ('social', 'تصاميم السوشيال ميديا'),
+            ('logo', 'الشعارات'),
+            ('brand', 'الهوية البصرية'),
+            ('banner', 'البنرات'),
+            ('thumbnail', 'الصور المصغرة'),
+            ('editing', 'المونتاج'),
+            ('reels', 'الريلز والشورتس'),
+            ('ads', 'فيديوهات إعلانية')
+        ]
+    }
+    
+    # حقول النموذج في صفحة الإضافة/التعديل
+    form_columns = ['title', 'category', 'image_url', 'image_file', 'video_url', 'is_active', 'sort_order']
+    form_widget_args = {
+        'title': {'placeholder': 'أدخل عنوان العمل'},
+        'image_url': {'placeholder': 'https://example.com/image.jpg'},
+        'video_url': {'placeholder': 'https://youtube.com/embed/...'},
+    }
 
+    # دعم رفع الملفات المحلية
+    form_extra_fields = {
+        'image_file': ImageUploadField(
+            'رفع صورة',
+            base_path=app.config['UPLOAD_FOLDER'],
+            url_relative_path='uploads/',
+            namegen=lambda obj, file_data: f"{uuid.uuid4().hex}_{secure_filename(file_data.filename)}",
+            allowed_extensions=['jpg', 'jpeg', 'png', 'gif', 'webp']
+        )
+    }
 
-# ================================================================
-# 2. المسارات (Routes) - عرض الصفحات
-# ================================================================
+    # جعل الحقول اختيارية
+    form_args = {
+        'image_url': {'required': False},
+        'image_file': {'required': False},
+        'video_url': {'required': False},
+    }
 
+    def get_image_url(self, obj):
+        """إرجاع رابط الصورة النهائي (يستخدم الأولوية للملف المحلي)"""
+        if obj.image_file:
+            return f"/static/uploads/{obj.image_file}"
+        return obj.image_url or ''
+
+# إضافة الواجهة الإدارية
+admin = Admin(app, name='YM Studio - لوحة التحكم', template_mode='bootstrap4')
+admin.add_view(ProjectAdmin(Project, db.session, name='المشاريع', endpoint='admin_projects'))
+
+# ============================================================
+# نقطة نهاية API لجلب البيانات (للواجهة الأمامية)
+# ============================================================
+@app.route('/api/projects')
+def get_projects():
+    """إرجاع قائمة المشاريع النشطة بصيغة JSON"""
+    projects = Project.query.filter_by(is_active=True).order_by(Project.sort_order.asc()).all()
+    data = []
+    for p in projects:
+        img = p.image_file if p.image_file else p.image_url
+        data.append({
+            'id': p.id,
+            'title': p.title,
+            'category': p.category,
+            'image_url': f"/static/uploads/{p.image_file}" if p.image_file else p.image_url,
+            'video_url': p.video_url
+        })
+    return jsonify(data)
+
+# ============================================================
+# الصفحة الرئيسية
+# ============================================================
 @app.route('/')
 def index():
-    """الصفحة الرئيسية - تعرض جميع البيانات من الخادم."""
-    data = load_data()
-    # تمرير البيانات إلى القالب لعرضها
-    return render_template('index.html', data=data)
+    return render_template('index.html')
 
-
-@app.route('/admin')
-def admin_panel():
-    """صفحة لوحة التحكم (تظهر كصفحة منفصلة أو يمكن تضمينها)."""
-    data = load_data()
-    return render_template('admin_panel.html', data=data)
-
-
-# ================================================================
-# 3. واجهة برمجة التطبيقات (API) - تعديل البيانات
-# ================================================================
-
-@app.route('/api/data', methods=['GET'])
-def get_data():
-    """إرجاع جميع البيانات بصيغة JSON."""
-    return jsonify(load_data())
-
-
-@app.route('/api/data', methods=['POST'])
-def update_data():
-    """
-    تحديث البيانات بالكامل.
-    يجب إرسال كائن JSON كامل يحتوي على جميع الحقول.
-    """
-    try:
-        new_data = request.get_json()
-        if not new_data:
-            return jsonify({"error": "البيانات غير صالحة"}), 400
-
-        # التحقق من وجود الحقول الأساسية
-        required_fields = ['siteName', 'heroTitle', 'heroHighlight', 'heroSubtitle',
-                           'bioText', 'ctaText', 'ctaLink', 'footerText',
-                           'primaryColor', 'secondaryColor', 'services', 'projects', 'social']
-        for field in required_fields:
-            if field not in new_data:
-                return jsonify({"error": f"الحقل {field} مفقود"}), 400
-
-        save_data(new_data)
-        return jsonify({"message": "تم حفظ البيانات بنجاح", "data": new_data}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-# ================================================================
-# 4. تشغيل الخادم
-# ================================================================
-
+# ============================================================
+# تشغيل التطبيق
+# ============================================================
 if __name__ == '__main__':
-    # تشغيل الخادم على المنفذ 5000 مع خاصية التحديث التلقائي
     app.run(debug=True, host='0.0.0.0', port=5000)
